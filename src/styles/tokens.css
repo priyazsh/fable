@@ -1,0 +1,74 @@
+/*
+ * Forge design tokens.
+ *
+ * Every color, space and radius used by the shell comes from here so the
+ * theme stays swappable. Components must not hardcode raw values.
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* Surfaces, back to front */
+  --bg-base: #0b0d10;
+  --bg-surface: #12151a;
+  --bg-raised: #171b21;
+  --bg-overlay: #1e232b;
+
+  /* Text */
+  --text: #e6e9ef;
+  --text-muted: #aab3c0;
+  --text-faint: #7c8694;
+
+  /* Lines */
+  --border: #232830;
+  --border-strong: #2f3641;
+
+  /* Accents */
+  --accent: #e8833a;
+  --accent-dim: #8a4e22;
+  --accent-agent: #7c9eff;
+  --ok: #4ec984;
+  --warn: #e0b341;
+  --err: #f06c6c;
+
+  /* Typography.
+     Settings override --font-mono (prepending a chosen family) and
+     --font-size; every text size derives from the latter so the whole UI
+     scales together. */
+  /* Nerd Font variants first: they are what people actually have installed,
+     and their family names do not match the plain "JetBrains Mono" string. */
+  --font-mono-system: "JetBrainsMono Nerd Font", "JetBrains Mono",
+    "CaskaydiaCove Nerd Font", "Cascadia Code", "FiraCode Nerd Font",
+    ui-monospace, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  --font-mono: var(--font-mono-system);
+  --font-size: 14px;
+  /* Terminals run tight. 1.5 reads as prose; 1.3 reads as a terminal. */
+  --line-height: 1.3;
+  --text-xs: calc(var(--font-size) - 2px);
+  --text-sm: calc(var(--font-size) - 1px);
+  --text-md: var(--font-size);
+  --text-lg: calc(var(--font-size) + 2px);
+
+  /* Space */
+  --space-1: 4px;
+  --space-2: 6px;
+  --space-3: 8px;
+  --space-4: 12px;
+  --space-5: 16px;
+  --space-6: 24px;
+
+  /* Shape */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+
+  /* Chrome metrics */
+  --header-height: 38px;
+  --tabstrip-height: 34px;
+  --statusbar-height: 24px;
+  --agent-panel-width: 340px;
+  --gutter: 1px;
+
+  /* Motion */
+  --transition-fast: 90ms ease;
+}

@@ -1,0 +1,80 @@
+.status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: var(--statusbar-height);
+  padding: 0 var(--space-5);
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.mark {
+  color: var(--accent);
+}
+
+.cwd {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.muted {
+  color: var(--text-faint);
+}
+
+.divider {
+  width: 1px;
+  height: 11px;
+  background: var(--border-strong);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.agent,
+.agentWarn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.agent {
+  color: var(--text-faint);
+}
+
+.agentWarn {
+  color: var(--warn);
+}
+
+.agent:hover,
+.agentWarn:hover {
+  background: var(--bg-raised);
+  color: var(--text);
+}
+
+.gear {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-left: calc(var(--space-2) * -1);
+  border-radius: var(--radius-sm);
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+  line-height: 1;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.gear:hover,
+.gear[aria-pressed="true"] {
+  background: var(--bg-raised);
+  color: var(--text);
+}

@@ -1,0 +1,97 @@
+/* The prompt sits in the scrollback, so it carries no chrome of its own —
+   no border, no panel, no padding that separates it from the output above. */
+.prompt {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  align-items: start;
+  gap: 0 1ch;
+}
+
+.cwd {
+  color: var(--text-faint);
+  line-height: var(--line-height);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 40ch;
+}
+
+.sigil,
+.sigilAgent {
+  line-height: var(--line-height);
+}
+
+.sigil {
+  color: var(--accent);
+}
+
+.sigilAgent {
+  color: var(--accent-agent);
+}
+
+.inputWrap {
+  position: relative;
+  min-width: 0;
+}
+
+.input {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  line-height: var(--line-height);
+  resize: none;
+  overflow-y: auto;
+  user-select: text;
+  caret-color: var(--accent);
+  /* Progressive: a block caret where the engine supports it. */
+  caret-shape: block;
+}
+
+.input:focus-visible {
+  outline: none;
+}
+
+.blockCursor {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1ch;
+  height: calc(var(--line-height) * 1em);
+  background: var(--accent);
+  opacity: 0.85;
+  pointer-events: none;
+  animation: blink 1.05s step-end infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.hint,
+.hintAgent {
+  font-size: var(--text-xs);
+  line-height: calc(var(--line-height) * 1.15);
+  white-space: nowrap;
+  opacity: 0.7;
+}
+
+.hint {
+  color: var(--accent);
+}
+
+.hintAgent {
+  color: var(--accent-agent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .blockCursor {
+    animation: none;
+  }
+}

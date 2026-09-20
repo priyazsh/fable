@@ -1,0 +1,213 @@
+.view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* Terminals hug their edges. */
+  padding: var(--space-2) var(--space-3) var(--space-4);
+}
+
+/* ---- entries ---------------------------------------------------- */
+
+/* Dense: a command and its output are one unit, with a single blank line
+   between units — the rhythm of a real scrollback. */
+.entry {
+  margin-bottom: var(--line-height, 1.3em);
+}
+
+.line {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: 0 1ch;
+}
+
+.sigil {
+  color: var(--accent);
+}
+
+.sigilAgent {
+  color: var(--accent-agent);
+}
+
+.input {
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.meta,
+.metaFailed {
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.meta {
+  color: var(--text-faint);
+}
+
+.metaFailed {
+  color: var(--err);
+}
+
+.running {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+/* Output starts at column 0 and at full brightness. Indenting it under the
+   command, or dimming it, made it read as a quoted block rather than as the
+   program's own voice. */
+.output {
+  margin: 0;
+  color: var(--text);
+  font: inherit;
+  line-height: var(--line-height);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.stderr {
+  color: var(--err);
+}
+
+.response {
+  margin: 0;
+  color: var(--text);
+  white-space: pre-wrap;
+  user-select: text;
+}
+
+.thinking {
+  color: var(--text-faint);
+}
+
+/* ---- empty state ------------------------------------------------ */
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-bottom: var(--space-4);
+  max-width: 76ch;
+}
+
+.emptyLead {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.emptyNote {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+}
+
+.emptyShortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-5);
+  margin: var(--space-1) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+  color: var(--text-faint);
+}
+
+.emptyShortcuts li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.kbd {
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+/* ---- agent steps ------------------------------------------------ */
+
+/* Agent steps are annotations on the transcript rather than program output,
+   so they keep a small indent to stay distinguishable from it. */
+.steps {
+  padding-left: 2ch;
+}
+
+.stepTool {
+  display: flex;
+  gap: 1ch;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.stepArrow {
+  color: var(--accent-agent);
+}
+
+.stepDetail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-faint);
+}
+
+.stepMeta {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.stepNotice {
+  margin: 0;
+  color: var(--warn);
+  font-size: var(--text-sm);
+}
+
+.agentError {
+  margin: 0;
+  color: var(--err);
+  white-space: pre-wrap;
+  user-select: text;
+}
+
+.runningAgent {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-agent);
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .running,
+  .runningAgent {
+    animation: none;
+  }
+}

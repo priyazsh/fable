@@ -1,0 +1,86 @@
+.splitRow,
+.splitColumn {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.splitRow {
+  flex-direction: row;
+}
+
+.splitColumn {
+  flex-direction: column;
+}
+
+.slot {
+  flex-grow: 0;
+  flex-shrink: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Gutters are 5px for a comfortable grab target but draw a 1px hairline. */
+.gutterRow,
+.gutterColumn {
+  position: relative;
+  flex: 0 0 5px;
+  touch-action: none;
+}
+
+.gutterRow {
+  cursor: col-resize;
+}
+
+.gutterColumn {
+  cursor: row-resize;
+}
+
+.gutterRow::after,
+.gutterColumn::after {
+  content: "";
+  position: absolute;
+  background: var(--border);
+  transition: background var(--transition-fast);
+}
+
+.gutterRow::after {
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 1px;
+}
+
+.gutterColumn::after {
+  left: 0;
+  right: 0;
+  top: 2px;
+  height: 1px;
+}
+
+.gutterRow:hover::after,
+.gutterColumn:hover::after {
+  background: var(--accent-dim);
+}
+
+/* Panes are unframed: the gutter hairlines are the only separator, so a single
+   pane adds no chrome at all. */
+.pane,
+.paneActive {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* "Focused" only means something once a split exists. */
+.splitRow .pane,
+.splitColumn .pane {
+  opacity: 0.55;
+  transition: opacity var(--transition-fast);
+}
