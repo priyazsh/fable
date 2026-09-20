@@ -32,7 +32,8 @@ impl SseDecoder {
             // Comments and the `event:` / `id:` / `retry:` fields are ignored:
             // both providers repeat the event name inside the JSON payload.
             if let Some(value) = line.strip_prefix("data:") {
-                self.data.push(value.strip_prefix(' ').unwrap_or(value).to_string());
+                self.data
+                    .push(value.strip_prefix(' ').unwrap_or(value).to_string());
             }
         }
 

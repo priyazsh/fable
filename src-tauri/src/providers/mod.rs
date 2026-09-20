@@ -13,18 +13,13 @@ use serde_json::Value;
 
 use crate::agent::AgentStep;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Provider {
+    #[default]
     Anthropic,
     #[serde(rename = "openai")]
     OpenAi,
-}
-
-impl Default for Provider {
-    fn default() -> Self {
-        Self::Anthropic
-    }
 }
 
 impl Provider {
@@ -114,7 +109,9 @@ pub fn explain_status(provider: Provider, status: u16, body: &str) -> String {
             "{name} rejected the API key. Check it in Settings — keys are at {}.",
             provider.console_url()
         ),
-        404 => format!("{name} does not recognise that model. Pick another in Settings. ({detail})"),
+        404 => {
+            format!("{name} does not recognise that model. Pick another in Settings. ({detail})")
+        }
         429 => format!("{name} rate-limited this request. Wait a moment and try again."),
         500..=599 => format!("{name} is having trouble (HTTP {status}). Try again shortly."),
         400 => format!("{name} rejected the request: {detail}"),
@@ -133,8 +130,14 @@ mod tests {
             assert_eq!(serde_json::from_str::<Provider>(&json).unwrap(), provider);
         }
         // Pinned: these strings are the TypeScript union and the keyring key.
-        assert_eq!(serde_json::to_string(&Provider::Anthropic).unwrap(), "\"anthropic\"");
-        assert_eq!(serde_json::to_string(&Provider::OpenAi).unwrap(), "\"openai\"");
+        assert_eq!(
+            serde_json::to_string(&Provider::Anthropic).unwrap(),
+            "\"anthropic\""
+        );
+        assert_eq!(
+            serde_json::to_string(&Provider::OpenAi).unwrap(),
+            "\"openai\""
+        );
         assert_eq!(Provider::Anthropic.account(), "anthropic");
         assert_eq!(Provider::OpenAi.account(), "openai");
     }
@@ -164,10 +167,20 @@ mod tests {
         assert!(auth.contains("console.anthropic.com"), "{auth}");
 
         let limit = explain_status(Provider::OpenAi, 429, "{}");
-        assert!(limit.contains("OpenAI") && limit.contains("rate-limited"), "{limit}");
+        assert!(
+            limit.contains("OpenAI") && limit.contains("rate-limited"),
+            "{limit}"
+        );
 
-        let missing = explain_status(Provider::OpenAi, 404, r#"{"error":{"message":"no such model"}}"#);
-        assert!(missing.contains("Pick another") && missing.contains("no such model"), "{missing}");
+        let missing = explain_status(
+            Provider::OpenAi,
+            404,
+            r#"{"error":{"message":"no such model"}}"#,
+        );
+        assert!(
+            missing.contains("Pick another") && missing.contains("no such model"),
+            "{missing}"
+        );
 
         let down = explain_status(Provider::Anthropic, 503, "{}");
         assert!(down.contains("503"), "{down}");

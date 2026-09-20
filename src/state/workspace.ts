@@ -119,7 +119,7 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   fontFamily: "ui-monospace",
-  fontSize: 13,
+  fontSize: 14,
   shell: null,
   newTabCwd: "cwd",
   provider: "anthropic",

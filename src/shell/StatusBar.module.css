@@ -35,6 +35,31 @@
   flex: 1;
 }
 
+.agent,
+.agentWarn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.agent {
+  color: var(--text-faint);
+}
+
+.agentWarn {
+  color: var(--warn);
+}
+
+.agent:hover,
+.agentWarn:hover {
+  background: var(--bg-raised);
+  color: var(--text);
+}
+
 .gear {
   display: grid;
   place-items: center;

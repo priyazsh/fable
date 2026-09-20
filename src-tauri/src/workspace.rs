@@ -120,8 +120,14 @@ mod tests {
         assert!(project_summary(crate_root).contains("Rust"));
 
         let root = project_summary(repo);
-        assert!(root.contains("Bun") && root.contains("Node"), "got {root:?}");
-        assert!(!root.contains("Rust"), "must not descend into src-tauri: {root:?}");
+        assert!(
+            root.contains("Bun") && root.contains("Node"),
+            "got {root:?}"
+        );
+        assert!(
+            !root.contains("Rust"),
+            "must not descend into src-tauri: {root:?}"
+        );
         // git_branch does walk up, so the repo root reports a branch.
         assert!(root.contains("Git branch:"), "got {root:?}");
     }

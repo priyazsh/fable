@@ -14,6 +14,7 @@ import { useEffect, useRef, useState } from "react";
 import { clearApiKey, hasApiKey, listModels, setApiKey } from "@/platform/agent";
 import { availableShells, installedFonts, setSettings, settingsFile } from "@/platform/settings";
 import { useWorkspace, useWorkspaceDispatch } from "@/state/WorkspaceContext";
+import { SHORTCUT_HELP } from "@/state/keymap";
 import type { Provider, Settings } from "@/state/workspace";
 
 import styles from "./SettingsPanel.module.css";
@@ -321,6 +322,16 @@ export function SettingsPanel() {
               {modelsError && <p className={styles.blurb}>{modelsError}</p>}
             </div>
           </label>
+          <hr className={styles.rule} />
+
+          <div className={styles.shortcuts}>
+            {SHORTCUT_HELP.map((shortcut) => (
+              <div key={shortcut.chord} className={styles.shortcut}>
+                <kbd className={styles.kbd}>{shortcut.chord}</kbd>
+                <span>{shortcut.label}</span>
+              </div>
+            ))}
+          </div>
         </div>
 
         {error && <p className={styles.error}>{error}</p>}

@@ -16,8 +16,8 @@
 
   /* Text */
   --text: #e6e9ef;
-  --text-muted: #8b94a3;
-  --text-faint: #5b6472;
+  --text-muted: #aab3c0;
+  --text-faint: #7c8694;
 
   /* Lines */
   --border: #232830;
@@ -35,10 +35,13 @@
      Settings override --font-mono (prepending a chosen family) and
      --font-size; every text size derives from the latter so the whole UI
      scales together. */
-  --font-mono-system: ui-monospace, "JetBrains Mono", "Cascadia Code", "SF Mono",
-    Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  /* Nerd Font variants first: they are what people actually have installed,
+     and their family names do not match the plain "JetBrains Mono" string. */
+  --font-mono-system: "JetBrainsMono Nerd Font", "JetBrains Mono",
+    "CaskaydiaCove Nerd Font", "Cascadia Code", "FiraCode Nerd Font",
+    ui-monospace, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
   --font-mono: var(--font-mono-system);
-  --font-size: 13px;
+  --font-size: 14px;
   /* Terminals run tight. 1.5 reads as prose; 1.3 reads as a terminal. */
   --line-height: 1.3;
   --text-xs: calc(var(--font-size) - 2px);

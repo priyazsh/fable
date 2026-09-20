@@ -45,7 +45,11 @@ fn http() -> &'static reqwest::Client {
 
 /// Provider-neutral view of what the agent is doing.
 #[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(tag = "kind", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum AgentStep {
     Started {
         session_id: Option<String>,

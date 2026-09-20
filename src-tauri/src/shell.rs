@@ -299,7 +299,9 @@ pub fn command_exists(name: String) -> bool {
 /// status bar.
 fn tidy(path: &Path) -> String {
     let text = path.to_string_lossy().into_owned();
-    text.strip_prefix(r"\\?\").map(str::to_string).unwrap_or(text)
+    text.strip_prefix(r"\\?\")
+        .map(str::to_string)
+        .unwrap_or(text)
 }
 
 /// Resolves the target of a `cd`, expanding `~` and relative paths.
@@ -311,11 +313,14 @@ pub fn resolve_dir(cwd: String, target: Option<String>) -> Result<String, String
     let home = home_dir();
     let raw = match target.filter(|value| !value.trim().is_empty()) {
         Some(value) => value.trim().to_string(),
-        None => home.clone().ok_or_else(|| "cd: no home directory".to_string())?,
+        None => home
+            .clone()
+            .ok_or_else(|| "cd: no home directory".to_string())?,
     };
 
     let expanded = if raw == "~" {
-        home.clone().ok_or_else(|| "cd: no home directory".to_string())?
+        home.clone()
+            .ok_or_else(|| "cd: no home directory".to_string())?
     } else if let Some(rest) = raw.strip_prefix("~/").or_else(|| raw.strip_prefix("~\\")) {
         let home = home.ok_or_else(|| "cd: no home directory".to_string())?;
         Path::new(&home).join(rest).to_string_lossy().into_owned()
@@ -338,7 +343,6 @@ pub fn resolve_dir(cwd: String, target: Option<String>) -> Result<String, String
     }
     Ok(tidy(&canonical))
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -408,7 +412,10 @@ mod tests {
     #[test]
     fn prose_does_not_resolve_as_a_program() {
         for word in ["fix", "explain", "refactor", "why"] {
-            assert!(!command_exists(word.to_string()), "{word} should not be on PATH");
+            assert!(
+                !command_exists(word.to_string()),
+                "{word} should not be on PATH"
+            );
         }
     }
 

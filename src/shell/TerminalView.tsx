@@ -6,11 +6,9 @@
  * surface. The timeline, prompt and routing stay as they are.
  */
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 
-import { agentReady } from "@/platform/agent";
 import { useWorkspace } from "@/state/WorkspaceContext";
-import { SHORTCUT_HELP } from "@/state/keymap";
 import { entriesOf, type CommandEntry, type Session, type TaskEntry } from "@/state/workspace";
 
 import { PromptInput } from "./PromptInput";
@@ -63,59 +61,20 @@ export function TerminalView({ session, focused }: { session: Session; focused: 
       }}
     >
       <div className={styles.scroll} ref={scrollRef} onScroll={onScroll}>
-        {entries.length === 0 ? (
-          <EmptyState />
-        ) : (
-          entries.map((entry) =>
-            entry.kind === "command" ? (
-              <CommandRow key={entry.id} entry={entry} />
-            ) : (
-              <TaskRow key={entry.id} entry={entry} />
-            ),
-          )
+        {/* No welcome screen: a terminal opens to a prompt. Discovery lives in
+            the status bar and in Settings, not in a wall of onboarding text. */}
+        {entries.map((entry) =>
+          entry.kind === "command" ? (
+            <CommandRow key={entry.id} entry={entry} />
+          ) : (
+            <TaskRow key={entry.id} entry={entry} />
+          ),
         )}
 
         {/* Inside the scrollback, not pinned below it: the prompt follows the
             last output the way a real shell prompt does. */}
         <PromptInput ref={promptRef} session={session} entries={entries} />
       </div>
-    </div>
-  );
-}
-
-function EmptyState() {
-  const { settings, settingsOpen } = useWorkspace();
-  const [ready, setReady] = useState<boolean | null>(null);
-
-  // Re-probed when settings close, so adding a key clears this immediately.
-  useEffect(() => {
-    void agentReady().then(setReady);
-  }, [settings, settingsOpen]);
-
-  return (
-    <div className={styles.empty}>
-      <p className={styles.emptyLead}>
-        Type a command to run it, or describe a task to hand it to the agent.
-      </p>
-      <p className={styles.emptyNote}>
-        <kbd className={styles.kbd}>!</kbd> forces the shell,{" "}
-        <kbd className={styles.kbd}>?</kbd> forces the agent. Interactive programs need the
-        PTY, which arrives in milestone 4.
-      </p>
-      {ready === false && (
-        <p className={styles.emptyNote}>
-          The agent has no API key yet, so anything that is not a command has nowhere to
-          go. <SettingsButton focus="agent">Add a key</SettingsButton>
-        </p>
-      )}
-      <ul className={styles.emptyShortcuts}>
-        {SHORTCUT_HELP.map((shortcut) => (
-          <li key={shortcut.chord}>
-            <kbd className={styles.kbd}>{shortcut.chord}</kbd>
-            <span>{shortcut.label}</span>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }
@@ -145,10 +104,7 @@ function CommandRow({ entry }: { entry: CommandEntry }) {
       {entry.chunks.length > 0 && (
         <pre className={styles.output}>
           {entry.chunks.map((chunk, index) => (
-            <span
-              key={index}
-              className={chunk.stream === "stderr" ? styles.stderr : undefined}
-            >
+            <span key={index} className={chunk.stream === "stderr" ? styles.stderr : undefined}>
               {chunk.text}
             </span>
           ))}

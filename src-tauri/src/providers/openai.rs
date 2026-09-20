@@ -146,25 +146,45 @@ mod tests {
         let steps = stream.push(CHUNK);
         assert_eq!(steps.len(), 2, "started + text");
         assert!(matches!(steps[0], AgentStep::Started { .. }));
-        assert_eq!(steps[1], AgentStep::Text { text: "Run ".into() });
+        assert_eq!(
+            steps[1],
+            AgentStep::Text {
+                text: "Run ".into()
+            }
+        );
 
         // A second chunk yields only text.
-        assert_eq!(stream.push(CHUNK), vec![AgentStep::Text { text: "Run ".into() }]);
+        assert_eq!(
+            stream.push(CHUNK),
+            vec![AgentStep::Text {
+                text: "Run ".into()
+            }]
+        );
     }
 
     #[test]
     fn the_done_sentinel_finishes_once() {
         let mut stream = OpenAiStream::default();
         let steps = stream.push("[DONE]");
-        assert!(matches!(steps[0], AgentStep::Done { is_error: false, .. }));
+        assert!(matches!(
+            steps[0],
+            AgentStep::Done {
+                is_error: false,
+                ..
+            }
+        ));
         assert!(stream.push("[DONE]").is_empty(), "no double finish");
     }
 
     #[test]
     fn an_in_band_error_finishes_as_a_failure_and_suppresses_done() {
         let mut stream = OpenAiStream::default();
-        let steps = stream.push(r#"{"error":{"message":"Rate limit reached","type":"rate_limit_error"}}"#);
-        let AgentStep::Done { is_error, result, .. } = &steps[0] else {
+        let steps =
+            stream.push(r#"{"error":{"message":"Rate limit reached","type":"rate_limit_error"}}"#);
+        let AgentStep::Done {
+            is_error, result, ..
+        } = &steps[0]
+        else {
             panic!("expected done");
         };
         assert!(is_error);

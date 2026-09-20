@@ -26,7 +26,7 @@ fn default_font_family() -> String {
 }
 
 const fn default_font_size() -> u16 {
-    13
+    14
 }
 
 const fn default_new_tab_cwd() -> NewTabCwd {
@@ -146,7 +146,8 @@ pub fn set_settings(
 
     let path = settings_path(&app)?;
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|error| format!("{}: {error}", parent.display()))?;
+        std::fs::create_dir_all(parent)
+            .map_err(|error| format!("{}: {error}", parent.display()))?;
     }
     let text = serde_json::to_string_pretty(&settings).map_err(|error| error.to_string())?;
     std::fs::write(&path, text).map_err(|error| format!("{}: {error}", path.display()))?;

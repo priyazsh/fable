@@ -49,7 +49,12 @@ export async function availableShells(): Promise<string[]> {
 
 /** Monospace families worth offering; filtered to what is actually installed. */
 const FONT_CANDIDATES = [
+  "JetBrainsMono Nerd Font",
   "JetBrains Mono",
+  "CaskaydiaCove Nerd Font",
+  "FiraCode Nerd Font",
+  "Hack Nerd Font",
+  "Adwaita Mono",
   "Cascadia Code",
   "Fira Code",
   "IBM Plex Mono",

@@ -72,9 +72,7 @@ pub struct AnthropicStream {
 impl AnthropicStream {
     fn cost(&self) -> Option<f64> {
         let (input, output) = pricing(self.model.as_deref()?)?;
-        Some(
-            (self.input_tokens as f64 * input + self.output_tokens as f64 * output) / 1_000_000.0,
-        )
+        Some((self.input_tokens as f64 * input + self.output_tokens as f64 * output) / 1_000_000.0)
     }
 
     pub fn push(&mut self, data: &str) -> Vec<AgentStep> {
@@ -184,7 +182,8 @@ mod tests {
     const MESSAGE_START: &str = r#"{"type":"message_start","message":{"id":"msg_01","model":"claude-opus-5","usage":{"input_tokens":100}}}"#;
     const THINKING_START: &str = r#"{"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":""}}"#;
     const THINKING_DELTA: &str = r#"{"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"the user wants..."}}"#;
-    const TEXT_DELTA: &str = r#"{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Run "}}"#;
+    const TEXT_DELTA: &str =
+        r#"{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Run "}}"#;
     const MESSAGE_DELTA: &str = r#"{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":50}}"#;
 
     #[test]
@@ -206,7 +205,11 @@ mod tests {
     fn model_ids_carry_no_date_suffix() {
         for model in MODELS {
             assert!(
-                !model.chars().rev().take(8).all(|c| c.is_ascii_digit() || c == '-'),
+                !model
+                    .chars()
+                    .rev()
+                    .take(8)
+                    .all(|c| c.is_ascii_digit() || c == '-'),
                 "{model} looks date-suffixed"
             );
         }
@@ -241,7 +244,10 @@ mod tests {
     fn reasoning_never_becomes_a_step() {
         let mut stream = AnthropicStream::default();
         // The opening block announces work, with no content.
-        assert_eq!(stream.push(THINKING_START), vec![AgentStep::Progress { tokens: 0 }]);
+        assert_eq!(
+            stream.push(THINKING_START),
+            vec![AgentStep::Progress { tokens: 0 }]
+        );
         // Repeat blocks do not re-announce.
         assert!(stream.push(THINKING_START).is_empty());
         // And the reasoning itself is discarded.
@@ -258,7 +264,10 @@ mod tests {
         stream.push(MESSAGE_DELTA);
         let steps = stream.push(r#"{"type":"message_stop"}"#);
 
-        let AgentStep::Done { cost_usd, is_error, .. } = &steps[0] else {
+        let AgentStep::Done {
+            cost_usd, is_error, ..
+        } = &steps[0]
+        else {
             panic!("expected done");
         };
         assert!(!is_error);
@@ -282,10 +291,13 @@ mod tests {
     fn an_error_event_ends_the_stream_as_a_failure() {
         let mut stream = AnthropicStream::default();
         stream.push(MESSAGE_START);
-        let steps =
-            stream.push(r#"{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}"#);
+        let steps = stream
+            .push(r#"{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}"#);
 
-        let AgentStep::Done { is_error, result, .. } = &steps[0] else {
+        let AgentStep::Done {
+            is_error, result, ..
+        } = &steps[0]
+        else {
             panic!("expected done");
         };
         assert!(is_error);
@@ -301,6 +313,8 @@ mod tests {
         assert!(stream.push(r#"{"type":"ping"}"#).is_empty());
         assert!(stream.push(r#"{"type":"something_new"}"#).is_empty());
         assert!(stream.push("not json").is_empty());
-        assert!(stream.push(r#"{"type":"content_block_stop","index":0}"#).is_empty());
+        assert!(stream
+            .push(r#"{"type":"content_block_stop","index":0}"#)
+            .is_empty());
     }
 }
