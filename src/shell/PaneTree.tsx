@@ -1,9 +1,9 @@
 import { useRef, type PointerEvent as ReactPointerEvent } from "react";
 
 import { useWorkspace, useWorkspaceDispatch } from "@/state/WorkspaceContext";
-import type { PaneId, PaneNode } from "@/state/workspace";
+import type { PaneId, PaneNode, SessionId } from "@/state/workspace";
 
-import { TerminalPlaceholder } from "./TerminalPlaceholder";
+import { TerminalView } from "./TerminalView";
 import styles from "./PaneTree.module.css";
 
 /** Smallest fraction a pane may be dragged down to. */
@@ -27,21 +27,21 @@ function Pane({
   active,
 }: {
   paneId: PaneId;
-  sessionId: string;
+  sessionId: SessionId;
   active: boolean;
 }) {
   const workspace = useWorkspace();
   const dispatch = useWorkspaceDispatch();
   const session = workspace.sessions[sessionId];
+  if (!session) return null;
 
   return (
     <section
       className={active ? styles.paneActive : styles.pane}
       onMouseDown={() => dispatch({ type: "pane/focus", paneId })}
-      aria-label={session?.title ?? "terminal"}
+      aria-label={session.title}
     >
-      {/* Milestone 3 replaces this with the xterm.js view. */}
-      <TerminalPlaceholder cwd={session?.cwd ?? "~"} />
+      <TerminalView session={session} focused={active} />
     </section>
   );
 }

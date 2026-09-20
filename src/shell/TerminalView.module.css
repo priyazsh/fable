@@ -1,0 +1,152 @@
+.view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-4) var(--space-5) 0;
+}
+
+/* ---- entries ---------------------------------------------------- */
+
+.entry {
+  margin-bottom: var(--space-4);
+}
+
+.line {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.sigil {
+  color: var(--accent);
+}
+
+.sigilAgent {
+  color: var(--accent-agent);
+}
+
+.input {
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.meta,
+.metaFailed {
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.meta {
+  color: var(--text-faint);
+}
+
+.metaFailed {
+  color: var(--err);
+}
+
+.running {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.output {
+  margin: var(--space-2) 0 0;
+  /* Align output under the command text, past the sigil. */
+  padding-left: calc(1ch + var(--space-3));
+  color: var(--text-muted);
+  font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.stderr {
+  color: var(--err);
+}
+
+.response {
+  margin: var(--space-2) 0 0;
+  padding-left: calc(1ch + var(--space-3));
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  user-select: text;
+}
+
+.thinking {
+  color: var(--text-faint);
+}
+
+/* ---- empty state ------------------------------------------------ */
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) 0 var(--space-5);
+  max-width: 68ch;
+}
+
+.emptyLead {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.emptyNote {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+  line-height: 1.7;
+}
+
+.emptyShortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+  color: var(--text-faint);
+}
+
+.emptyShortcuts li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.kbd {
+  padding: 1px var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .running {
+    animation: none;
+  }
+}

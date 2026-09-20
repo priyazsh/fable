@@ -11,15 +11,17 @@ export function StatusBar() {
 
   return (
     <footer className={styles.status}>
-      <span className={styles.item}>{session?.title ?? "terminal"}</span>
-      <span className={styles.divider} aria-hidden="true" />
-      <span className={styles.item} title={session?.cwd}>
+      <span className={styles.mark} aria-hidden="true">
+        ✦
+      </span>
+      <span className={styles.cwd} title={session?.cwd}>
         {abbreviatePath(session?.cwd ?? "~", workspace.info?.home)}
       </span>
+
       {paneCount > 1 && (
         <>
           <span className={styles.divider} aria-hidden="true" />
-          <span className={styles.item}>{paneCount} panes</span>
+          <span className={styles.muted}>{paneCount} panes</span>
         </>
       )}
 
@@ -29,9 +31,7 @@ export function StatusBar() {
         {workspace.info ? `${workspace.info.os}/${workspace.info.arch}` : "detecting…"}
       </span>
       <span className={styles.divider} aria-hidden="true" />
-      <span className={styles.muted}>
-        forge {workspace.info?.appVersion ?? "0.1.0"}
-      </span>
+      <span className={styles.muted}>forge {workspace.info?.appVersion ?? "0.1.0"}</span>
     </footer>
   );
 }

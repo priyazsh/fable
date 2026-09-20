@@ -22,7 +22,7 @@ pub struct WorkspaceInfo {
 }
 
 /// Resolves the user's home directory without pulling in an extra crate.
-fn home_dir() -> Option<String> {
+pub fn home_dir() -> Option<String> {
     let key = if cfg!(windows) { "USERPROFILE" } else { "HOME" };
     std::env::var(key).ok().filter(|value| !value.is_empty())
 }

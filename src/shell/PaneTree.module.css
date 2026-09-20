@@ -65,6 +65,8 @@
   background: var(--accent-dim);
 }
 
+/* Panes are unframed: the gutter hairlines are the only separator, so a single
+   pane adds no chrome at all. */
 .pane,
 .paneActive {
   display: flex;
@@ -74,18 +76,11 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--bg-surface);
-  transition: border-color var(--transition-fast);
 }
 
-.paneActive {
-  border-color: var(--border-strong);
-}
-
-/* Only mark the active pane when a split actually exists to disambiguate. */
-.splitRow .paneActive,
-.splitColumn .paneActive {
-  border-color: var(--accent-dim);
+/* "Focused" only means something once a split exists. */
+.splitRow .pane,
+.splitColumn .pane {
+  opacity: 0.55;
+  transition: opacity var(--transition-fast);
 }

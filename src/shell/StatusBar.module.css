@@ -2,7 +2,8 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: 0 var(--space-4);
+  height: var(--statusbar-height);
+  padding: 0 var(--space-5);
   background: var(--bg-surface);
   border-top: 1px solid var(--border);
   font-size: var(--text-xs);
@@ -11,7 +12,11 @@
   overflow: hidden;
 }
 
-.item {
+.mark {
+  color: var(--accent);
+}
+
+.cwd {
   overflow: hidden;
   text-overflow: ellipsis;
 }

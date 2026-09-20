@@ -1,10 +1,12 @@
 /**
- * Workspace state: tabs, panes and sessions.
+ * Workspace state: tabs, panes, sessions and the command/task timeline.
  *
- * The pane layout is a binary split tree, which is the smallest shape that
- * expresses arbitrarily nested horizontal/vertical splits. A `Session` is
- * currently a thin record; the terminal runtime (Milestone 4) attaches PTY
- * handles to it without changing the tree.
+ * A session owns an ordered list of timeline entries. Entries are stored in a
+ * flat map keyed by id so streaming output can be applied in O(1) without
+ * walking every session.
+ *
+ * The pane layout is a binary split tree, the smallest shape that expresses
+ * arbitrarily nested splits.
  *
  * The reducer is pure: id generation is seeded from `state.seq` rather than a
  * module-level counter, so React StrictMode's double invocation is harmless.
@@ -14,6 +16,7 @@ export type TabId = string;
 export type PaneId = string;
 export type NodeId = string;
 export type SessionId = string;
+export type EntryId = string;
 
 /** `row` splits left/right, `column` splits top/bottom. Mirrors flex-direction. */
 export type SplitDirection = "row" | "column";
@@ -29,10 +32,45 @@ export type PaneNode =
       sizes: [number, number];
     };
 
+export type OutputStream = "stdout" | "stderr";
+
+export interface OutputChunk {
+  stream: OutputStream;
+  text: string;
+}
+
+/** Something the user ran. */
+export interface CommandEntry {
+  id: EntryId;
+  kind: "command";
+  input: string;
+  cwd: string;
+  chunks: OutputChunk[];
+  /** `null` while running, or when the process was killed by a signal. */
+  exitCode: number | null;
+  durationMs: number | null;
+  running: boolean;
+}
+
+/** Something the user asked the agent to do. */
+export interface TaskEntry {
+  id: EntryId;
+  kind: "task";
+  input: string;
+  cwd: string;
+  /** `null` while the agent is working. */
+  response: string | null;
+}
+
+export type Entry = CommandEntry | TaskEntry;
+
 export interface Session {
   id: SessionId;
   title: string;
   cwd: string;
+  entryIds: EntryId[];
+  /** Submitted inputs, oldest first, for up-arrow recall. */
+  history: string[];
 }
 
 export interface Tab {
@@ -55,7 +93,7 @@ export interface Workspace {
   tabs: Tab[];
   activeTabId: TabId;
   sessions: Record<SessionId, Session>;
-  agentPanelOpen: boolean;
+  entries: Record<EntryId, Entry>;
   info: WorkspaceInfo | null;
   /** Monotonic id seed. Keeps the reducer pure. */
   seq: number;
@@ -72,7 +110,12 @@ export type WorkspaceAction =
   | { type: "pane/close" }
   | { type: "pane/focus"; paneId: PaneId }
   | { type: "pane/resize"; nodeId: NodeId; sizes: [number, number] }
-  | { type: "agent/toggle" };
+  | { type: "entry/start"; sessionId: SessionId; entry: Entry }
+  | { type: "entry/output"; entryId: EntryId; stream: OutputStream; text: string }
+  | { type: "entry/exit"; entryId: EntryId; exitCode: number | null; durationMs: number }
+  | { type: "entry/response"; entryId: EntryId; response: string }
+  | { type: "session/cwd"; sessionId: SessionId; cwd: string }
+  | { type: "session/clear"; sessionId: SessionId };
 
 /* ------------------------------------------------------------------ */
 /* Tree helpers                                                        */
@@ -113,11 +156,7 @@ function removeLeaf(node: PaneNode, paneId: PaneId): PaneNode | null {
   return { ...node, children: [left, right] };
 }
 
-function updateSizes(
-  node: PaneNode,
-  nodeId: NodeId,
-  sizes: [number, number],
-): PaneNode {
+function updateSizes(node: PaneNode, nodeId: NodeId, sizes: [number, number]): PaneNode {
   if (node.kind === "leaf") return node;
   if (node.id === nodeId) return { ...node, sizes };
   return {
@@ -155,15 +194,12 @@ function createTab(
     id: id("session"),
     title: `terminal ${index}`,
     cwd,
+    entryIds: [],
+    history: [],
   };
   const pane: PaneNode = { kind: "leaf", id: id("pane"), sessionId: session.id };
   return {
-    tab: {
-      id: id("tab"),
-      title: session.title,
-      root: pane,
-      activePaneId: pane.id,
-    },
+    tab: { id: id("tab"), title: session.title, root: pane, activePaneId: pane.id },
     session,
   };
 }
@@ -175,23 +211,55 @@ export function createInitialWorkspace(): Workspace {
     tabs: [tab],
     activeTabId: tab.id,
     sessions: { [session.id]: session },
-    agentPanelOpen: true,
+    entries: {},
     info: null,
     seq: ids.seq,
   };
 }
 
-/** Drops sessions no longer referenced by any pane. */
-function pruneSessions(
+/** Drops sessions, and their entries, once no pane references them. */
+function prune(
   tabs: Tab[],
   sessions: Record<SessionId, Session>,
-): Record<SessionId, Session> {
+  entries: Record<EntryId, Entry>,
+): { sessions: Record<SessionId, Session>; entries: Record<EntryId, Entry> } {
   const live = new Set(tabs.flatMap((tab) => collectLeaves(tab.root).map((l) => l.sessionId)));
-  const next: Record<SessionId, Session> = {};
+
+  const nextSessions: Record<SessionId, Session> = {};
+  const liveEntries = new Set<EntryId>();
   for (const [id, session] of Object.entries(sessions)) {
-    if (live.has(id)) next[id] = session;
+    if (!live.has(id)) continue;
+    nextSessions[id] = session;
+    for (const entryId of session.entryIds) liveEntries.add(entryId);
   }
-  return next;
+
+  const nextEntries: Record<EntryId, Entry> = {};
+  for (const [id, entry] of Object.entries(entries)) {
+    if (liveEntries.has(id)) nextEntries[id] = entry;
+  }
+  return { sessions: nextSessions, entries: nextEntries };
+}
+
+/** Appends output, merging into the previous chunk when the stream matches. */
+function appendChunk(chunks: OutputChunk[], stream: OutputStream, text: string): OutputChunk[] {
+  const last = chunks[chunks.length - 1];
+  if (last && last.stream === stream) {
+    return [...chunks.slice(0, -1), { stream, text: last.text + text }];
+  }
+  return [...chunks, { stream, text }];
+}
+
+/** Applies `change` to one entry, leaving state untouched if it is gone. */
+function patchEntry(
+  state: Workspace,
+  entryId: EntryId,
+  change: (entry: Entry) => Entry | null,
+): Workspace {
+  const entry = state.entries[entryId];
+  if (!entry) return state;
+  const next = change(entry);
+  if (!next || next === entry) return state;
+  return { ...state, entries: { ...state.entries, [entryId]: next } };
 }
 
 /* ------------------------------------------------------------------ */
@@ -240,6 +308,7 @@ export function workspaceReducer(state: Workspace, action: WorkspaceAction): Wor
           tabs: [tab],
           activeTabId: tab.id,
           sessions: { [session.id]: session },
+          entries: {},
           seq: ids.seq,
         };
       }
@@ -249,12 +318,7 @@ export function workspaceReducer(state: Workspace, action: WorkspaceAction): Wor
         state.activeTabId === action.tabId
           ? tabs[Math.min(index, tabs.length - 1)].id
           : state.activeTabId;
-      return {
-        ...state,
-        tabs,
-        activeTabId,
-        sessions: pruneSessions(tabs, state.sessions),
-      };
+      return { ...state, tabs, activeTabId, ...prune(tabs, state.sessions, state.entries) };
     }
 
     case "tab/activate":
@@ -276,22 +340,23 @@ export function workspaceReducer(state: Workspace, action: WorkspaceAction): Wor
 
     case "pane/split": {
       if (!activeTab) return state;
-      const cwd = state.sessions[leafSessionId(activeTab)]?.cwd ?? DEFAULT_CWD;
+      const existing = collectLeaves(activeTab.root).find(
+        (leaf) => leaf.id === activeTab.activePaneId,
+      );
+      if (!existing) return state;
+
       const session: Session = {
         id: ids.next("session"),
         title: activeTab.title,
-        cwd,
+        cwd: state.sessions[existing.sessionId]?.cwd ?? DEFAULT_CWD,
+        entryIds: [],
+        history: [],
       };
       const newPane: PaneNode = {
         kind: "leaf",
         id: ids.next("pane"),
         sessionId: session.id,
       };
-      const existing = collectLeaves(activeTab.root).find(
-        (leaf) => leaf.id === activeTab.activePaneId,
-      );
-      if (!existing) return state;
-
       const split: PaneNode = {
         kind: "split",
         id: ids.next("split"),
@@ -325,13 +390,14 @@ export function workspaceReducer(state: Workspace, action: WorkspaceAction): Wor
       }
       const root = removeLeaf(activeTab.root, activeTab.activePaneId);
       if (!root) return state;
+
       const remaining = collectLeaves(root);
       const closedIndex = leaves.findIndex((leaf) => leaf.id === activeTab.activePaneId);
       const nextActive = remaining[Math.min(closedIndex, remaining.length - 1)];
       const tabs = state.tabs.map((tab) =>
         tab.id === activeTab.id ? { ...tab, root, activePaneId: nextActive.id } : tab,
       );
-      return { ...state, tabs, sessions: pruneSessions(tabs, state.sessions) };
+      return { ...state, tabs, ...prune(tabs, state.sessions, state.entries) };
     }
 
     case "pane/focus": {
@@ -352,8 +418,74 @@ export function workspaceReducer(state: Workspace, action: WorkspaceAction): Wor
       return { ...state, tabs };
     }
 
-    case "agent/toggle":
-      return { ...state, agentPanelOpen: !state.agentPanelOpen };
+    case "entry/start": {
+      const session = state.sessions[action.sessionId];
+      if (!session) return state;
+      // Consecutive duplicates are not worth recalling.
+      const history =
+        session.history[session.history.length - 1] === action.entry.input
+          ? session.history
+          : [...session.history, action.entry.input];
+      return {
+        ...state,
+        sessions: {
+          ...state.sessions,
+          [session.id]: {
+            ...session,
+            entryIds: [...session.entryIds, action.entry.id],
+            history,
+          },
+        },
+        entries: { ...state.entries, [action.entry.id]: action.entry },
+      };
+    }
+
+    case "entry/output":
+      return patchEntry(state, action.entryId, (entry) =>
+        entry.kind === "command"
+          ? { ...entry, chunks: appendChunk(entry.chunks, action.stream, action.text) }
+          : entry,
+      );
+
+    case "entry/exit":
+      return patchEntry(state, action.entryId, (entry) =>
+        entry.kind === "command"
+          ? {
+              ...entry,
+              running: false,
+              exitCode: action.exitCode,
+              durationMs: action.durationMs,
+            }
+          : entry,
+      );
+
+    case "entry/response":
+      return patchEntry(state, action.entryId, (entry) =>
+        entry.kind === "task" ? { ...entry, response: action.response } : entry,
+      );
+
+    case "session/cwd": {
+      const session = state.sessions[action.sessionId];
+      if (!session || session.cwd === action.cwd) return state;
+      return {
+        ...state,
+        sessions: { ...state.sessions, [session.id]: { ...session, cwd: action.cwd } },
+      };
+    }
+
+    case "session/clear": {
+      const session = state.sessions[action.sessionId];
+      if (!session || session.entryIds.length === 0) return state;
+      const cleared = new Set(session.entryIds);
+      const entries = Object.fromEntries(
+        Object.entries(state.entries).filter(([id]) => !cleared.has(id)),
+      );
+      return {
+        ...state,
+        sessions: { ...state.sessions, [session.id]: { ...session, entryIds: [] } },
+        entries,
+      };
+    }
   }
 }
 
@@ -361,9 +493,9 @@ export function workspaceReducer(state: Workspace, action: WorkspaceAction): Wor
 /* Selectors                                                           */
 /* ------------------------------------------------------------------ */
 
-function leafSessionId(tab: Tab): SessionId {
-  const leaf = collectLeaves(tab.root).find((l) => l.id === tab.activePaneId);
-  return leaf?.sessionId ?? collectLeaves(tab.root)[0].sessionId;
+function activeSessionId(tab: Tab): SessionId {
+  const leaves = collectLeaves(tab.root);
+  return (leaves.find((leaf) => leaf.id === tab.activePaneId) ?? leaves[0]).sessionId;
 }
 
 export function activeTabOf(state: Workspace): Tab | undefined {
@@ -372,7 +504,13 @@ export function activeTabOf(state: Workspace): Tab | undefined {
 
 export function activeSessionOf(state: Workspace): Session | undefined {
   const tab = activeTabOf(state);
-  return tab ? state.sessions[leafSessionId(tab)] : undefined;
+  return tab ? state.sessions[activeSessionId(tab)] : undefined;
+}
+
+export function entriesOf(state: Workspace, session: Session): Entry[] {
+  return session.entryIds
+    .map((id) => state.entries[id])
+    .filter((entry): entry is Entry => Boolean(entry));
 }
 
 /** Renders `/home/me/Works/forge` as `~/Works/forge` for display. */

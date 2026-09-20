@@ -1,23 +1,15 @@
+/* Flex rather than grid: the tab strip is absent with a single tab, and grid
+   rows are positional, so a missing row would shift the panes and status bar
+   into the wrong tracks. */
 .shell {
-  display: grid;
-  grid-template-rows:
-    var(--header-height)
-    var(--tabstrip-height)
-    1fr
-    var(--statusbar-height);
+  display: flex;
+  flex-direction: column;
   height: 100%;
   background: var(--bg-base);
 }
 
 .body {
-  display: grid;
-  grid-template-columns: 1fr auto;
+  flex: 1;
   min-height: 0;
   min-width: 0;
-}
-
-.panes {
-  min-height: 0;
-  min-width: 0;
-  padding: var(--space-2);
 }

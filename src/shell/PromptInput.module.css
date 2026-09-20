@@ -1,0 +1,68 @@
+.prompt {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5) var(--space-4);
+  border-top: 1px solid transparent;
+  transition: border-color var(--transition-fast);
+}
+
+.prompt:focus-within {
+  border-top-color: var(--border);
+}
+
+.sigil,
+.sigilAgent {
+  /* Match the textarea's first line box so the sigil sits on the baseline. */
+  line-height: 1.5;
+}
+
+.sigil {
+  color: var(--accent);
+}
+
+.sigilAgent {
+  color: var(--accent-agent);
+}
+
+.input {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  line-height: 1.5;
+  resize: none;
+  overflow-y: auto;
+  user-select: text;
+  caret-color: var(--accent);
+}
+
+/* The caret is the focus indicator here; a focus ring would make the prompt
+   look like a form field rather than a terminal line. */
+.input:focus-visible {
+  outline: none;
+}
+
+.input::placeholder {
+  color: var(--text-faint);
+}
+
+.hint,
+.hintAgent {
+  font-size: var(--text-xs);
+  line-height: 1.8;
+  white-space: nowrap;
+  opacity: 0.75;
+}
+
+.hint {
+  color: var(--accent);
+}
+
+.hintAgent {
+  color: var(--accent-agent);
+}
