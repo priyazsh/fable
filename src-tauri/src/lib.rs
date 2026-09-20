@@ -1,4 +1,6 @@
 mod agent;
+mod providers;
+mod secrets;
 mod settings;
 mod shell;
 mod workspace;
@@ -29,7 +31,11 @@ pub fn run() {
             settings::available_shells,
             agent::run_agent_task,
             agent::kill_agent,
-            agent::agent_available,
+            agent::agent_ready,
+            agent::has_api_key,
+            agent::set_api_key,
+            agent::clear_api_key,
+            agent::list_models,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

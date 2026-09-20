@@ -1,21 +1,24 @@
+/* The prompt sits in the scrollback, so it carries no chrome of its own —
+   no border, no panel, no padding that separates it from the output above. */
 .prompt {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto auto 1fr auto;
   align-items: start;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-5) var(--space-4);
-  border-top: 1px solid transparent;
-  transition: border-color var(--transition-fast);
+  gap: 0 1ch;
 }
 
-.prompt:focus-within {
-  border-top-color: var(--border);
+.cwd {
+  color: var(--text-faint);
+  line-height: var(--line-height);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 40ch;
 }
 
 .sigil,
 .sigilAgent {
-  /* Match the textarea's first line box so the sigil sits on the baseline. */
-  line-height: 1.5;
+  line-height: var(--line-height);
 }
 
 .sigil {
@@ -26,7 +29,13 @@
   color: var(--accent-agent);
 }
 
+.inputWrap {
+  position: relative;
+  min-width: 0;
+}
+
 .input {
+  display: block;
   width: 100%;
   margin: 0;
   padding: 0;
@@ -34,29 +43,43 @@
   background: none;
   color: var(--text);
   font: inherit;
-  line-height: 1.5;
+  line-height: var(--line-height);
   resize: none;
   overflow-y: auto;
   user-select: text;
   caret-color: var(--accent);
+  /* Progressive: a block caret where the engine supports it. */
+  caret-shape: block;
 }
 
-/* The caret is the focus indicator here; a focus ring would make the prompt
-   look like a form field rather than a terminal line. */
 .input:focus-visible {
   outline: none;
 }
 
-.input::placeholder {
-  color: var(--text-faint);
+.blockCursor {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1ch;
+  height: calc(var(--line-height) * 1em);
+  background: var(--accent);
+  opacity: 0.85;
+  pointer-events: none;
+  animation: blink 1.05s step-end infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
 }
 
 .hint,
 .hintAgent {
   font-size: var(--text-xs);
-  line-height: 1.8;
+  line-height: calc(var(--line-height) * 1.15);
   white-space: nowrap;
-  opacity: 0.75;
+  opacity: 0.7;
 }
 
 .hint {
@@ -65,4 +88,10 @@
 
 .hintAgent {
   color: var(--accent-agent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .blockCursor {
+    animation: none;
+  }
 }

@@ -60,29 +60,13 @@ export interface CommandEntry {
  * blocks rather than forwarding them (spec §12).
  */
 export type AgentStep =
-  | {
-      kind: "started";
-      sessionId: string | null;
-      model: string | null;
-      permissionMode: string | null;
-    }
-  /** Prose the agent wrote for the user. */
+  | { kind: "started"; sessionId: string | null; model: string | null }
+  /** Prose. Arrives as deltas and is merged on arrival. */
   | { kind: "text"; text: string }
-  /** An action the agent took. */
-  | { kind: "tool"; name: string; detail: string | null }
-  /** Liveness only — a token count, never any content. */
+  /** Liveness only — `0` means "working", never any reasoning content. */
   | { kind: "progress"; tokens: number }
-  /** Out-of-band message, such as backend stderr. */
-  | { kind: "notice"; text: string }
-  | {
-      kind: "done";
-      result: string | null;
-      isError: boolean;
-      turns: number | null;
-      durationMs: number | null;
-      costUsd: number | null;
-      denials: number;
-    };
+  /** Terminal step; `result` carries the message when `isError` is set. */
+  | { kind: "done"; result: string | null; isError: boolean; costUsd: number | null };
 
 /** Something the user asked the agent to do. */
 export interface TaskEntry {
@@ -118,13 +102,8 @@ export interface Tab {
 /** Where a newly opened tab starts. Mirrors the Rust enum. */
 export type NewTabCwd = "cwd" | "home";
 
-/**
- * How much the agent may do unattended.
- *
- * `readOnly` is the default: destructive access is never granted implicitly
- * (spec §11) and autonomy is an explicit opt-in (spec §13).
- */
-export type AgentPermissions = "readOnly" | "edits" | "full";
+/** Agent backend. Mirrors `providers::Provider` in Rust. */
+export type Provider = "anthropic" | "openai";
 
 /** Mirrors `settings::Settings` in Rust. */
 export interface Settings {
@@ -133,11 +112,9 @@ export interface Settings {
   /** `null` means "use $SHELL". */
   shell: string | null;
   newTabCwd: NewTabCwd;
-  agentPermissions: AgentPermissions;
-  /** `null` uses the backend's own default model. */
+  provider: Provider;
+  /** `null` uses the provider's default model. */
   agentModel: string | null;
-  /** `null` looks up `claude` on PATH. */
-  agentBinary: string | null;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -145,9 +122,8 @@ export const DEFAULT_SETTINGS: Settings = {
   fontSize: 13,
   shell: null,
   newTabCwd: "cwd",
-  agentPermissions: "readOnly",
+  provider: "anthropic",
   agentModel: null,
-  agentBinary: null,
 };
 
 /** Snapshot returned by the `workspace_info` Rust command. */
@@ -344,13 +320,20 @@ function appendChunk(chunks: OutputChunk[], stream: OutputStream, text: string):
 }
 
 /**
- * Appends an agent step, collapsing consecutive progress ticks so a long task
- * does not accumulate hundreds of counter entries.
+ * Appends an agent step, coalescing the two kinds that arrive in bulk:
+ * progress ticks and streamed prose deltas.
  */
 function appendStep(steps: AgentStep[], step: AgentStep): AgentStep[] {
   const last = steps[steps.length - 1];
-  if (step.kind === "progress" && last?.kind === "progress") {
-    return [...steps.slice(0, -1), step];
+  if (last) {
+    if (step.kind === "progress" && last.kind === "progress") {
+      return [...steps.slice(0, -1), step];
+    }
+    // Providers stream prose one delta at a time; merging keeps the timeline
+    // one paragraph per message rather than one per token.
+    if (step.kind === "text" && last.kind === "text") {
+      return [...steps.slice(0, -1), { kind: "text", text: last.text + step.text }];
+    }
   }
   return [...steps, step];
 }

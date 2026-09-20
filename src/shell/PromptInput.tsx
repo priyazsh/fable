@@ -11,7 +11,8 @@ import { useEffect, useLayoutEffect, useState, type RefObject } from "react";
 import { cachedCommand, ensureCommand } from "@/platform/shell";
 import { classify, firstToken, splitForce } from "@/state/classify";
 import { useSubmit } from "@/state/useSubmit";
-import type { Entry, Session } from "@/state/workspace";
+import { useWorkspace } from "@/state/WorkspaceContext";
+import { abbreviatePath, type Entry, type Session } from "@/state/workspace";
 
 import styles from "./PromptInput.module.css";
 
@@ -25,6 +26,7 @@ interface PromptInputProps {
 }
 
 export function PromptInput({ ref, session, entries }: PromptInputProps) {
+  const workspace = useWorkspace();
   const { submit, interrupt } = useSubmit();
   const [value, setValue] = useState("");
   const [draft, setDraft] = useState("");
@@ -107,23 +109,31 @@ export function PromptInput({ ref, session, entries }: PromptInputProps) {
 
   return (
     <div className={styles.prompt} data-route={asTask ? "task" : "command"}>
+      {/* A prompt says where you are. */}
+      <span className={styles.cwd}>{abbreviatePath(session.cwd, workspace.info?.home)}</span>
+
       <span className={asTask ? styles.sigilAgent : styles.sigil} aria-hidden="true">
-        {asTask ? "✦" : "$"}
+        {asTask ? "✦" : "❯"}
       </span>
 
-      <textarea
-        ref={ref}
-        className={styles.input}
-        value={value}
-        onChange={(event) => setValue(event.currentTarget.value)}
-        onKeyDown={onKeyDown}
-        rows={1}
-        spellCheck={false}
-        autoCapitalize="off"
-        autoCorrect="off"
-        autoComplete="off"
-        aria-label="Command or task"
-      />
+      <span className={styles.inputWrap}>
+        <textarea
+          ref={ref}
+          className={styles.input}
+          value={value}
+          onChange={(event) => setValue(event.currentTarget.value)}
+          onKeyDown={onKeyDown}
+          rows={1}
+          spellCheck={false}
+          autoCapitalize="off"
+          autoCorrect="off"
+          autoComplete="off"
+          aria-label="Command or task"
+        />
+        {/* An empty prompt shows a block cursor. The caret sits at offset zero,
+            so the block lands exactly on it. */}
+        {value === "" && <span className={styles.blockCursor} aria-hidden="true" />}
+      </span>
 
       {value.trim() && (
         <span className={asTask ? styles.hintAgent : styles.hint}>

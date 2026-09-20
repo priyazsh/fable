@@ -358,11 +358,29 @@ describe("timeline", () => {
       {
         type: "entry/agentStep",
         entryId: "t1",
-        step: { kind: "tool", name: "Read", detail: "src/auth.ts" },
+        step: { kind: "started", sessionId: "s1", model: "claude-opus-5" },
       },
       { type: "entry/agentStep", entryId: "t1", step: { kind: "text", text: "Fixed it." } },
     );
-    expect(task(state).steps.map((step) => step.kind)).toEqual(["tool", "text"]);
+    expect(task(state).steps.map((step) => step.kind)).toEqual(["started", "text"]);
+  });
+
+  test("streamed prose deltas merge into one paragraph", () => {
+    let state = startTask(createInitialWorkspace());
+    for (const text of ["Run ", "bun ", "test"]) {
+      state = run(state, { type: "entry/agentStep", entryId: "t1", step: { kind: "text", text } });
+    }
+    const steps = task(state).steps;
+    expect(steps).toHaveLength(1);
+    expect(steps[0]).toEqual({ kind: "text", text: "Run bun test" });
+
+    // A different step between deltas starts a new paragraph.
+    state = run(
+      state,
+      { type: "entry/agentStep", entryId: "t1", step: { kind: "progress", tokens: 10 } },
+      { type: "entry/agentStep", entryId: "t1", step: { kind: "text", text: "Then commit." } },
+    );
+    expect(task(state).steps.map((step) => step.kind)).toEqual(["text", "progress", "text"]);
   });
 
   test("consecutive progress ticks collapse instead of piling up", () => {
@@ -398,15 +416,7 @@ describe("timeline", () => {
       {
         type: "entry/agentStep",
         entryId: "t1",
-        step: {
-          kind: "done",
-          result: "ok",
-          isError: false,
-          turns: 2,
-          durationMs: 900,
-          costUsd: 0.01,
-          denials: 0,
-        },
+        step: { kind: "done", result: null, isError: false, costUsd: 0.01 },
       },
       { type: "entry/agentExit", entryId: "t1", exitCode: 0, durationMs: 950 },
     );

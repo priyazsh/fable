@@ -6,8 +6,9 @@
  * surface. The timeline, prompt and routing stay as they are.
  */
 
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import { agentReady } from "@/platform/agent";
 import { useWorkspace } from "@/state/WorkspaceContext";
 import { SHORTCUT_HELP } from "@/state/keymap";
 import { entriesOf, type CommandEntry, type Session, type TaskEntry } from "@/state/workspace";
@@ -73,14 +74,24 @@ export function TerminalView({ session, focused }: { session: Session; focused: 
             ),
           )
         )}
-      </div>
 
-      <PromptInput ref={promptRef} session={session} entries={entries} />
+        {/* Inside the scrollback, not pinned below it: the prompt follows the
+            last output the way a real shell prompt does. */}
+        <PromptInput ref={promptRef} session={session} entries={entries} />
+      </div>
     </div>
   );
 }
 
 function EmptyState() {
+  const { settings, settingsOpen } = useWorkspace();
+  const [ready, setReady] = useState<boolean | null>(null);
+
+  // Re-probed when settings close, so adding a key clears this immediately.
+  useEffect(() => {
+    void agentReady().then(setReady);
+  }, [settings, settingsOpen]);
+
   return (
     <div className={styles.empty}>
       <p className={styles.emptyLead}>
@@ -91,11 +102,12 @@ function EmptyState() {
         <kbd className={styles.kbd}>?</kbd> forces the agent. Interactive programs need the
         PTY, which arrives in milestone 4.
       </p>
-      <p className={styles.emptyNote}>
-        The agent runs read-only until you say otherwise — it can read and plan, but not
-        edit or run anything.{" "}
-        <SettingsButton focus="agent">Change what it may do</SettingsButton>
-      </p>
+      {ready === false && (
+        <p className={styles.emptyNote}>
+          The agent has no API key yet, so anything that is not a command has nowhere to
+          go. <SettingsButton focus="agent">Add a key</SettingsButton>
+        </p>
+      )}
       <ul className={styles.emptyShortcuts}>
         {SHORTCUT_HELP.map((shortcut) => (
           <li key={shortcut.chord}>
@@ -146,24 +158,6 @@ function CommandRow({ entry }: { entry: CommandEntry }) {
   );
 }
 
-/** Present-tense verbs for the tools the agent reports using. */
-const TOOL_VERBS: Record<string, string> = {
-  Read: "reading",
-  Edit: "editing",
-  Write: "writing",
-  NotebookEdit: "editing",
-  Bash: "running",
-  BashOutput: "running",
-  Grep: "searching",
-  Glob: "searching",
-  Task: "delegating",
-  Agent: "delegating",
-  WebFetch: "fetching",
-  WebSearch: "searching",
-  Skill: "using",
-  TodoWrite: "planning",
-};
-
 function formatTokens(tokens: number): string {
   return tokens >= 1000 ? `${(tokens / 1000).toFixed(1)}k` : String(tokens);
 }
@@ -175,7 +169,6 @@ function formatCost(usd: number): string {
 function TaskRow({ entry }: { entry: TaskEntry }) {
   const lastStep = entry.steps[entry.steps.length - 1];
   const done = entry.steps.find((step) => step.kind === "done");
-  const spoke = entry.steps.some((step) => step.kind === "text");
   const failed = Boolean(entry.error) || (done?.kind === "done" && done.isError);
 
   return (
@@ -196,22 +189,11 @@ function TaskRow({ entry }: { entry: TaskEntry }) {
         {entry.steps.map((step, index) => {
           switch (step.kind) {
             case "started":
-              return (
+              return step.model ? (
                 <p key={index} className={styles.stepMeta}>
-                  {[step.model, step.permissionMode].filter(Boolean).join(" · ")}
+                  {step.model}
                 </p>
-              );
-
-            case "tool":
-              return (
-                <p key={index} className={styles.stepTool}>
-                  <span className={styles.stepArrow} aria-hidden="true">
-                    ›
-                  </span>
-                  {TOOL_VERBS[step.name] ?? step.name.toLowerCase()}
-                  {step.detail && <span className={styles.stepDetail}>{step.detail}</span>}
-                </p>
-              );
+              ) : null;
 
             case "text":
               return (
@@ -220,46 +202,24 @@ function TaskRow({ entry }: { entry: TaskEntry }) {
                 </p>
               );
 
-            case "notice":
-              return (
-                <p key={index} className={styles.stepNotice}>
-                  {step.text}
-                </p>
-              );
-
-            // Progress is liveness only, and only while it is the latest word.
+            // Liveness, and only while it is the latest word.
             case "progress":
               return step === lastStep && entry.running ? (
                 <p key={index} className={styles.stepMeta}>
-                  working… {formatTokens(step.tokens)} tokens
+                  working…
+                  {step.tokens > 0 && ` ${formatTokens(step.tokens)} tokens`}
                 </p>
               ) : null;
 
             case "done":
               return (
                 <div key={index}>
-                  {/* The result repeats the last message unless the agent
-                      never spoke, in which case it is all we have. */}
-                  {!spoke && step.result && (
-                    <p className={step.isError ? styles.agentError : styles.response}>
-                      {step.result}
-                    </p>
+                  {step.isError && step.result && (
+                    <p className={styles.agentError}>{step.result}</p>
                   )}
-                  {step.denials > 0 && (
-                    <p className={styles.stepNotice}>
-                      {step.denials} action{step.denials === 1 ? " was" : "s were"} blocked by
-                      the current permission level.{" "}
-                      <SettingsButton focus="agent">Allow more</SettingsButton>
-                    </p>
+                  {step.costUsd !== null && (
+                    <p className={styles.stepMeta}>{formatCost(step.costUsd)}</p>
                   )}
-                  <p className={styles.stepMeta}>
-                    {[
-                      step.turns !== null && `${step.turns} turn${step.turns === 1 ? "" : "s"}`,
-                      step.costUsd !== null && formatCost(step.costUsd),
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
                 </div>
               );
           }
@@ -267,8 +227,7 @@ function TaskRow({ entry }: { entry: TaskEntry }) {
 
         {entry.error && (
           <p className={styles.agentError}>
-            {entry.error}{" "}
-            <SettingsButton focus="agent">Open settings</SettingsButton>
+            {entry.error} <SettingsButton focus="agent">Open settings</SettingsButton>
           </p>
         )}
       </div>

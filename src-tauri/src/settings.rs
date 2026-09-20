@@ -9,6 +9,8 @@ use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
+use crate::providers::Provider;
+
 /// Where a newly opened tab starts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -31,27 +33,6 @@ const fn default_new_tab_cwd() -> NewTabCwd {
     NewTabCwd::Cwd
 }
 
-/// How much the agent is allowed to do without asking.
-///
-/// `ReadOnly` is the default: spec §11 requires that destructive access is not
-/// granted by default, and spec §13 that autonomy is an explicit opt-in.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum AgentPermissions {
-    /// Inspect and plan only: no edits, no commands.
-    ReadOnly,
-    /// May edit files, but still cannot run commands.
-    Edits,
-    /// Unrestricted, including running commands.
-    Full,
-}
-
-impl Default for AgentPermissions {
-    fn default() -> Self {
-        Self::ReadOnly
-    }
-}
-
 /// Bounds keep a typo from rendering the UI unusable.
 const MIN_FONT_SIZE: u16 = 8;
 const MAX_FONT_SIZE: u16 = 32;
@@ -69,13 +50,10 @@ pub struct Settings {
     #[serde(default = "default_new_tab_cwd")]
     pub new_tab_cwd: NewTabCwd,
     #[serde(default)]
-    pub agent_permissions: AgentPermissions,
-    /// Model alias passed to the agent backend; `None` uses its default.
+    pub provider: Provider,
+    /// Model id sent to the provider; `None` uses the provider's default.
     #[serde(default)]
     pub agent_model: Option<String>,
-    /// Path to the agent binary; `None` means look up `claude` on PATH.
-    #[serde(default)]
-    pub agent_binary: Option<String>,
 }
 
 impl Default for Settings {
@@ -85,9 +63,8 @@ impl Default for Settings {
             font_size: default_font_size(),
             shell: None,
             new_tab_cwd: default_new_tab_cwd(),
-            agent_permissions: AgentPermissions::default(),
+            provider: Provider::default(),
             agent_model: None,
-            agent_binary: None,
         }
     }
 }
@@ -106,22 +83,7 @@ impl Settings {
             .agent_model
             .map(|model| model.trim().to_string())
             .filter(|model| !model.is_empty());
-        // A bare name is resolved on PATH later; an explicit path must exist.
-        self.agent_binary = self
-            .agent_binary
-            .map(|path| path.trim().to_string())
-            .filter(|path| !path.is_empty())
-            .filter(|path| {
-                !(path.contains('/') || path.contains('\\')) || PathBuf::from(path).is_file()
-            });
         self
-    }
-
-    /// The agent binary to invoke.
-    pub fn agent_command(&self) -> String {
-        self.agent_binary
-            .clone()
-            .unwrap_or_else(|| "claude".to_string())
     }
 }
 
@@ -291,29 +253,14 @@ mod tests {
     }
 
     #[test]
-    fn the_agent_defaults_to_read_only_and_the_claude_binary() {
+    fn the_agent_defaults_to_anthropic_with_no_model_override() {
         let settings = Settings::default();
-        assert_eq!(settings.agent_permissions, AgentPermissions::ReadOnly);
-        assert_eq!(settings.agent_command(), "claude");
+        assert_eq!(settings.provider, Provider::Anthropic);
         assert_eq!(settings.agent_model, None);
     }
 
     #[test]
-    fn a_bare_agent_name_survives_but_a_bogus_path_does_not() {
-        let bare = Settings {
-            agent_binary: Some("claude".into()),
-            ..Settings::default()
-        }
-        .sanitised();
-        assert_eq!(bare.agent_command(), "claude");
-
-        let bogus = Settings {
-            agent_binary: Some("/nope/claude".into()),
-            ..Settings::default()
-        }
-        .sanitised();
-        assert_eq!(bogus.agent_command(), "claude", "falls back to PATH lookup");
-
+    fn a_blank_model_is_treated_as_unset() {
         let blank = Settings {
             agent_model: Some("   ".into()),
             ..Settings::default()
@@ -329,8 +276,8 @@ mod tests {
         assert_eq!(settings.font_family, default_font_family());
         assert_eq!(settings.new_tab_cwd, NewTabCwd::Cwd);
         assert_eq!(settings.shell, None);
-        // A file written before the agent existed still loads.
-        assert_eq!(settings.agent_permissions, AgentPermissions::ReadOnly);
+        // A file written before providers existed still loads.
+        assert_eq!(settings.provider, Provider::Anthropic);
     }
 
     #[cfg(unix)]

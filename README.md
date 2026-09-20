@@ -29,30 +29,32 @@ Enter, and two prefixes override it:
 | `!` | force the shell (`!make the thing`) |
 | `?` | force the agent (`?git status`) |
 
+## The agent
+
+The `✦` branch sends the line to an LLM provider over HTTPS. Bring your own
+key — it is stored in your **OS keyring** (Secret Service, Credential Manager,
+Keychain), never in Forge's config file, and never in frontend state.
+
+| Provider | Models | Key from |
+|---|---|---|
+| Anthropic (default) | `claude-opus-5`, `claude-sonnet-5`, `claude-haiku-4-5`, `claude-fable-5-1` | console.anthropic.com |
+| OpenAI | fetched from your account's `/v1/models` | platform.openai.com |
+
+Set it in Settings (`Ctrl+,`). Each provider translates its own wire format
+into one small neutral step vocabulary, so nothing above `src-tauri/src/providers`
+knows either vendor's schema (spec §9).
+
+**What the agent can and cannot do.** There is no tool loop yet (milestone 11),
+so it cannot read files, edit them, or run commands. The system prompt says so
+explicitly, and gives it targeted context — working directory, platform,
+detected project type, git branch — so its advice is grounded and it returns
+exact commands rather than pretending to have acted.
+
+Reasoning is never displayed. Thinking blocks are discarded in the Rust
+translation layer before they can reach the UI (spec §12); only prose, a
+progress indicator and the final cost are surfaced.
+
 ## Stack
-
-| Layer | Technology |
-|---|---|
-| Desktop shell | Tauri 2 |
-| Native core | Rust |
-| Terminal UI | React 19 + TypeScript |
-| Bundler | Vite 8 |
-| Package manager | Bun |
-
-## Development
-
-```sh
-bun install         # frontend dependencies
-bun run tauri:dev   # run the desktop app with hot reload
-bun run typecheck   # tsc --noEmit
-bun test            # state, routing and timeline tests
-bun run tauri:build
-
-cd src-tauri && cargo test   # output pumping, PATH probing, cd resolution
-```
-
-Building on Linux requires `webkit2gtk-4.1` and its development headers.
-AppImage bundling additionally needs `patchelf`.
 
 ### Layout
 
@@ -64,8 +66,11 @@ src/
   styles/     design tokens and global styles
 src-tauri/
   src/
-    workspace.rs   environment snapshot
+    workspace.rs   environment snapshot, project detection
     shell.rs       command execution and streaming
+    agent.rs       the agent runtime and step vocabulary
+    secrets.rs     API keys, via the OS keyring
+    providers/     anthropic, openai, and shared SSE framing
 ```
 
 Everything that crosses the IPC boundary lives in `src/platform`, so the UI
@@ -83,6 +88,7 @@ never calls `invoke` directly and still renders in a plain browser.
 | `Ctrl+1`…`Ctrl+9` | Switch to tab *n* |
 | `Ctrl+Tab` / `Ctrl+Shift+Tab` | Cycle tabs |
 | `Ctrl+L` | Clear the session |
+| `Ctrl+,` | Settings |
 | `Ctrl+C` | Interrupt the running command |
 | `↑` / `↓` | Recall history |
 
@@ -100,10 +106,10 @@ chrome above the timeline at all.
 | 5 | Fully functional shell | partial (see below) |
 | 6 | Tabs and panes | ✅ layout; sessions are not yet PTY-backed |
 | 7 | Structured command blocks | ✅ shape; fed by one-shot execution |
-| 8 | Agent runtime | — |
-| 9 | Claude Code integration | — |
-| 10 | OpenAI integration | — |
-| 11 | Agent tools | — |
+| 8 | Agent runtime | ✅ streaming, provider-neutral steps |
+| 9 | Anthropic integration | ✅ |
+| 10 | OpenAI integration | ✅ |
+| 11 | Agent tools | — (the agent advises; it cannot act) |
 | 12 | Permissions and checkpoints | — |
 | 13 | Cross-platform CI / builds | — |
 

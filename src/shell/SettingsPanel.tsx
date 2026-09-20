@@ -1,25 +1,20 @@
 /**
  * Settings.
  *
- * Only settings that actually take effect are offered. There is no API-key
- * field because the agent backend is the Claude Code CLI, which uses the
- * user's existing credentials.
+ * Only settings that actually take effect are offered. API keys are written
+ * straight to the OS keyring through Rust and never enter frontend state —
+ * the UI only ever learns whether one exists.
  *
- * Every change round-trips through Rust and the UI adopts whatever Rust
+ * Every other change round-trips through Rust and the UI adopts whatever Rust
  * returns, so a clamped or rejected value is reflected immediately.
  */
 
 import { useEffect, useRef, useState } from "react";
 
-import { agentAvailable } from "@/platform/agent";
-import {
-  availableShells,
-  installedFonts,
-  setSettings,
-  settingsFile,
-} from "@/platform/settings";
+import { clearApiKey, hasApiKey, listModels, setApiKey } from "@/platform/agent";
+import { availableShells, installedFonts, setSettings, settingsFile } from "@/platform/settings";
 import { useWorkspace, useWorkspaceDispatch } from "@/state/WorkspaceContext";
-import type { AgentPermissions, Settings } from "@/state/workspace";
+import type { Provider, Settings } from "@/state/workspace";
 
 import styles from "./SettingsPanel.module.css";
 
@@ -27,29 +22,20 @@ const SYSTEM_FONT = "ui-monospace";
 const MIN_FONT_SIZE = 8;
 const MAX_FONT_SIZE = 32;
 
-/**
- * Read-only is first and is the default: destructive access is never granted
- * implicitly (spec §11), and autonomy is an explicit opt-in (spec §13).
- */
-const PERMISSION_CHOICES: { value: AgentPermissions; label: string; blurb: string }[] = [
+const PROVIDERS: { value: Provider; label: string; keyHint: string; console: string }[] = [
   {
-    value: "readOnly",
-    label: "Read-only",
-    blurb: "Inspects the workspace and plans. Cannot change or run anything.",
+    value: "anthropic",
+    label: "Anthropic",
+    keyHint: "sk-ant-…",
+    console: "console.anthropic.com",
   },
   {
-    value: "edits",
-    label: "Edits",
-    blurb: "May change files. Still cannot run commands.",
-  },
-  {
-    value: "full",
-    label: "Full",
-    blurb: "May edit files and run commands without asking. Use deliberately.",
+    value: "openai",
+    label: "OpenAI",
+    keyHint: "sk-…",
+    console: "platform.openai.com",
   },
 ];
-
-const MODEL_CHOICES = ["opus", "sonnet", "haiku"];
 
 function messageOf(error: unknown): string {
   if (typeof error === "string") return error;
@@ -70,8 +56,14 @@ export function SettingsPanel() {
   const [fonts, setFonts] = useState<string[]>([]);
   const [filePath, setFilePath] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [agentFound, setAgentFound] = useState<boolean | null>(null);
-  const agentRef = useRef<HTMLSelectElement>(null);
+
+  const [keyStored, setKeyStored] = useState<boolean | null>(null);
+  const [keyDraft, setKeyDraft] = useState("");
+  const [models, setModels] = useState<string[]>([]);
+  const [modelsError, setModelsError] = useState<string | null>(null);
+
+  const providerRef = useRef<HTMLSelectElement>(null);
+  const provider = PROVIDERS.find((entry) => entry.value === settings.provider) ?? PROVIDERS[0];
 
   useEffect(() => {
     setFonts(installedFonts());
@@ -79,15 +71,23 @@ export function SettingsPanel() {
     void settingsFile().then(setFilePath);
   }, []);
 
-  // Re-probed whenever the binary setting changes.
+  // Key presence and the model list are both provider-scoped.
   useEffect(() => {
-    void agentAvailable().then(setAgentFound);
-  }, [settings.agentBinary]);
-
-  // Opened from agent friction: land on the control that fixes it.
-  useEffect(() => {
-    if (settingsFocus === "agent") agentRef.current?.focus();
-  }, [settingsFocus]);
+    let alive = true;
+    setKeyDraft("");
+    setModelsError(null);
+    void hasApiKey(settings.provider).then((stored) => alive && setKeyStored(stored));
+    listModels(settings.provider)
+      .then((list) => alive && setModels(list))
+      .catch((cause) => {
+        if (!alive) return;
+        setModels([]);
+        setModelsError(messageOf(cause));
+      });
+    return () => {
+      alive = false;
+    };
+  }, [settings.provider, keyStored]);
 
   const close = () => dispatch({ type: "settings/close" });
 
@@ -102,10 +102,36 @@ export function SettingsPanel() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [dispatch]);
 
+  // Opened from agent friction: land on the control that fixes it.
+  useEffect(() => {
+    if (settingsFocus === "agent") providerRef.current?.focus();
+  }, [settingsFocus]);
+
   async function update(patch: Partial<Settings>) {
     try {
       const saved = await setSettings({ ...settings, ...patch });
       dispatch({ type: "settings/loaded", settings: saved });
+      setError(null);
+    } catch (cause) {
+      setError(messageOf(cause));
+    }
+  }
+
+  async function saveKey() {
+    try {
+      await setApiKey(settings.provider, keyDraft);
+      setKeyDraft("");
+      setKeyStored(true);
+      setError(null);
+    } catch (cause) {
+      setError(messageOf(cause));
+    }
+  }
+
+  async function removeKey() {
+    try {
+      await clearApiKey(settings.provider);
+      setKeyStored(false);
       setError(null);
     } catch (cause) {
       setError(messageOf(cause));
@@ -168,9 +194,7 @@ export function SettingsPanel() {
             <select
               className={styles.control}
               value={settings.shell ?? ""}
-              onChange={(event) =>
-                void update({ shell: event.currentTarget.value || null })
-              }
+              onChange={(event) => void update({ shell: event.currentTarget.value || null })}
             >
               <option value="">Default ($SHELL)</option>
               {shells.map((path) => (
@@ -206,62 +230,98 @@ export function SettingsPanel() {
 
           <hr className={styles.rule} />
 
-          <fieldset
+          <label
             className={settingsFocus === "agent" ? styles.fieldHighlighted : styles.field}
           >
-            <legend className={styles.label}>Agent can</legend>
-            <div className={styles.stack}>
-              <select
-                ref={agentRef}
-                className={styles.control}
-                value={settings.agentPermissions}
-                onChange={(event) =>
-                  void update({
-                    agentPermissions: event.currentTarget.value as AgentPermissions,
-                  })
-                }
-              >
-                {PERMISSION_CHOICES.map((choice) => (
-                  <option key={choice.value} value={choice.value}>
-                    {choice.label}
-                  </option>
-                ))}
-              </select>
-              <p className={styles.blurb}>
-                {
-                  PERMISSION_CHOICES.find(
-                    (choice) => choice.value === settings.agentPermissions,
-                  )?.blurb
-                }
-              </p>
-            </div>
-          </fieldset>
-
-          <label className={styles.field}>
-            <span className={styles.label}>Model</span>
+            <span className={styles.label}>Agent</span>
             <select
+              ref={providerRef}
               className={styles.control}
-              value={settings.agentModel ?? ""}
+              value={settings.provider}
               onChange={(event) =>
-                void update({ agentModel: event.currentTarget.value || null })
+                void update({
+                  provider: event.currentTarget.value as Provider,
+                  // Models do not carry across providers.
+                  agentModel: null,
+                })
               }
             >
-              <option value="">Default</option>
-              {MODEL_CHOICES.map((model) => (
-                <option key={model} value={model}>
-                  {model}
+              {PROVIDERS.map((entry) => (
+                <option key={entry.value} value={entry.value}>
+                  {entry.label}
                 </option>
               ))}
             </select>
           </label>
-        </div>
 
-        {agentFound === false && (
-          <p className={styles.warning}>
-            Claude Code was not found on PATH. Install it to use the agent — no API
-            key is needed, it signs in with your existing account.
-          </p>
-        )}
+          <label className={styles.field}>
+            <span className={styles.label}>API key</span>
+            <div className={styles.stack}>
+              <div className={styles.keyRow}>
+                <input
+                  className={styles.control}
+                  type="password"
+                  value={keyDraft}
+                  placeholder={keyStored ? "•••••••••••• stored" : provider.keyHint}
+                  spellCheck={false}
+                  autoComplete="off"
+                  onChange={(event) => setKeyDraft(event.currentTarget.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && keyDraft.trim()) {
+                      event.preventDefault();
+                      void saveKey();
+                    }
+                  }}
+                  aria-label={`${provider.label} API key`}
+                />
+                {keyDraft.trim() ? (
+                  <button type="button" className={styles.keyAction} onClick={() => void saveKey()}>
+                    Save
+                  </button>
+                ) : (
+                  keyStored && (
+                    <button
+                      type="button"
+                      className={styles.keyAction}
+                      onClick={() => void removeKey()}
+                    >
+                      Clear
+                    </button>
+                  )
+                )}
+              </div>
+              <p className={styles.blurb}>
+                {keyStored
+                  ? `Stored in your OS keyring, not in Forge's config file.`
+                  : `Create one at ${provider.console}. It goes to your OS keyring.`}
+              </p>
+            </div>
+          </label>
+
+          <label className={styles.field}>
+            <span className={styles.label}>Model</span>
+            <div className={styles.stack}>
+              <select
+                className={styles.control}
+                value={settings.agentModel ?? ""}
+                disabled={models.length === 0}
+                onChange={(event) =>
+                  void update({ agentModel: event.currentTarget.value || null })
+                }
+              >
+                <option value="">
+                  {settings.provider === "anthropic" ? "Default" : "Choose a model"}
+                </option>
+                {models.map((model) => (
+                  <option key={model} value={model}>
+                    {model}
+                  </option>
+                ))}
+              </select>
+              {modelsError && <p className={styles.blurb}>{modelsError}</p>}
+            </div>
+          </label>
+        </div>
 
         {error && <p className={styles.error}>{error}</p>}
 

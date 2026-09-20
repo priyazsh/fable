@@ -9,7 +9,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
-import type { AgentStep } from "@/state/workspace";
+import type { AgentStep, Provider } from "@/state/workspace";
 
 import { hasTauri } from "./shell";
 
@@ -44,14 +44,47 @@ export async function killAgent(entryId: string): Promise<void> {
   }
 }
 
-/** Whether the configured agent binary can be found. */
-export async function agentAvailable(): Promise<boolean> {
+/** Whether a task can run: a key is stored and a model is selected. */
+export async function agentReady(): Promise<boolean> {
   if (!hasTauri()) return false;
   try {
-    return await invoke<boolean>("agent_available");
+    return await invoke<boolean>("agent_ready");
   } catch {
     return false;
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* Keys                                                                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Keys live in the OS keyring, never in Forge's config file and never in
+ * frontend state — only their presence is ever reported back.
+ */
+export async function hasApiKey(provider: Provider): Promise<boolean> {
+  if (!hasTauri()) return false;
+  try {
+    return await invoke<boolean>("has_api_key", { provider });
+  } catch {
+    return false;
+  }
+}
+
+export async function setApiKey(provider: Provider, key: string): Promise<void> {
+  if (!hasTauri()) throw new Error("storing a key requires the desktop app");
+  await invoke("set_api_key", { provider, key });
+}
+
+export async function clearApiKey(provider: Provider): Promise<void> {
+  if (!hasTauri()) return;
+  await invoke("clear_api_key", { provider });
+}
+
+/** Models the account can use. Fetched from the provider where possible. */
+export async function listModels(provider: Provider): Promise<string[]> {
+  if (!hasTauri()) return [];
+  return invoke<string[]>("list_models", { provider });
 }
 
 export function onAgentStep(handler: (event: AgentStepEvent) => void): Promise<UnlistenFn> {
