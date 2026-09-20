@@ -497,6 +497,37 @@ describe("settings", () => {
     expect(run(state, { type: "settings/close" })).toBe(state);
   });
 
+  test("opening from a blocked action carries the section to jump to", () => {
+    let state = run(createInitialWorkspace(), { type: "settings/open", focus: "agent" });
+    expect(state.settingsOpen).toBe(true);
+    expect(state.settingsFocus).toBe("agent");
+
+    // Closing forgets it, so the next plain open is not still highlighted.
+    state = run(state, { type: "settings/close" });
+    expect(state.settingsFocus).toBeNull();
+  });
+
+  test("opening without a section highlights nothing", () => {
+    const state = run(createInitialWorkspace(), { type: "settings/open" });
+    expect(state.settingsOpen).toBe(true);
+    expect(state.settingsFocus).toBeNull();
+  });
+
+  test("the gear clears a focus left over from a contextual open", () => {
+    let state = run(createInitialWorkspace(), { type: "settings/open", focus: "agent" });
+    // Toggling shut and open again is a plain visit.
+    state = run(state, { type: "settings/toggle" }, { type: "settings/toggle" });
+    expect(state.settingsOpen).toBe(true);
+    expect(state.settingsFocus).toBeNull();
+  });
+
+  test("opening an already-open panel just changes the focus", () => {
+    let state = run(createInitialWorkspace(), { type: "settings/open" });
+    state = run(state, { type: "settings/open", focus: "agent" });
+    expect(state.settingsOpen).toBe(true);
+    expect(state.settingsFocus).toBe("agent");
+  });
+
   test("loaded settings replace the defaults", () => {
     const state = run(createInitialWorkspace(), {
       type: "settings/loaded",

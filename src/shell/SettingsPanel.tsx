@@ -9,7 +9,7 @@
  * returns, so a clamped or rejected value is reflected immediately.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { agentAvailable } from "@/platform/agent";
 import {
@@ -63,7 +63,7 @@ function shellName(path: string): string {
 }
 
 export function SettingsPanel() {
-  const { settings } = useWorkspace();
+  const { settings, settingsFocus } = useWorkspace();
   const dispatch = useWorkspaceDispatch();
 
   const [shells, setShells] = useState<string[]>([]);
@@ -71,6 +71,7 @@ export function SettingsPanel() {
   const [filePath, setFilePath] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [agentFound, setAgentFound] = useState<boolean | null>(null);
+  const agentRef = useRef<HTMLSelectElement>(null);
 
   useEffect(() => {
     setFonts(installedFonts());
@@ -82,6 +83,11 @@ export function SettingsPanel() {
   useEffect(() => {
     void agentAvailable().then(setAgentFound);
   }, [settings.agentBinary]);
+
+  // Opened from agent friction: land on the control that fixes it.
+  useEffect(() => {
+    if (settingsFocus === "agent") agentRef.current?.focus();
+  }, [settingsFocus]);
 
   const close = () => dispatch({ type: "settings/close" });
 
@@ -200,10 +206,13 @@ export function SettingsPanel() {
 
           <hr className={styles.rule} />
 
-          <fieldset className={styles.field}>
+          <fieldset
+            className={settingsFocus === "agent" ? styles.fieldHighlighted : styles.field}
+          >
             <legend className={styles.label}>Agent can</legend>
             <div className={styles.stack}>
               <select
+                ref={agentRef}
                 className={styles.control}
                 value={settings.agentPermissions}
                 onChange={(event) =>

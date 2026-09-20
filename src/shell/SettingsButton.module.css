@@ -1,0 +1,29 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 1px var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: 1.7;
+  white-space: nowrap;
+  transition: border-color var(--transition-fast), color var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.button:hover {
+  border-color: var(--accent-dim);
+  background: var(--bg-overlay);
+  color: var(--text);
+}
+
+.gear {
+  color: var(--text-faint);
+}
+
+.button:hover .gear {
+  color: var(--accent);
+}

@@ -13,6 +13,7 @@ import { SHORTCUT_HELP } from "@/state/keymap";
 import { entriesOf, type CommandEntry, type Session, type TaskEntry } from "@/state/workspace";
 
 import { PromptInput } from "./PromptInput";
+import { SettingsButton } from "./SettingsButton";
 import styles from "./TerminalView.module.css";
 
 /** Treat the view as "pinned" when the user is within this many px of the end. */
@@ -87,9 +88,13 @@ function EmptyState() {
       </p>
       <p className={styles.emptyNote}>
         <kbd className={styles.kbd}>!</kbd> forces the shell,{" "}
-        <kbd className={styles.kbd}>?</kbd> forces the agent. The agent starts read-only —
-        raise what it may do in Settings. Interactive programs need the PTY, which
-        arrives in milestone 4.
+        <kbd className={styles.kbd}>?</kbd> forces the agent. Interactive programs need the
+        PTY, which arrives in milestone 4.
+      </p>
+      <p className={styles.emptyNote}>
+        The agent runs read-only until you say otherwise — it can read and plan, but not
+        edit or run anything.{" "}
+        <SettingsButton focus="agent">Change what it may do</SettingsButton>
       </p>
       <ul className={styles.emptyShortcuts}>
         {SHORTCUT_HELP.map((shortcut) => (
@@ -243,7 +248,8 @@ function TaskRow({ entry }: { entry: TaskEntry }) {
                   {step.denials > 0 && (
                     <p className={styles.stepNotice}>
                       {step.denials} action{step.denials === 1 ? " was" : "s were"} blocked by
-                      the current permission level — change it in Settings (Ctrl+,).
+                      the current permission level.{" "}
+                      <SettingsButton focus="agent">Allow more</SettingsButton>
                     </p>
                   )}
                   <p className={styles.stepMeta}>
@@ -259,7 +265,12 @@ function TaskRow({ entry }: { entry: TaskEntry }) {
           }
         })}
 
-        {entry.error && <p className={styles.agentError}>{entry.error}</p>}
+        {entry.error && (
+          <p className={styles.agentError}>
+            {entry.error}{" "}
+            <SettingsButton focus="agent">Open settings</SettingsButton>
+          </p>
+        )}
       </div>
     </article>
   );

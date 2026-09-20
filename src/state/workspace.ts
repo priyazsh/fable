@@ -159,6 +159,9 @@ export interface WorkspaceInfo {
   appVersion: string;
 }
 
+/** Section the settings panel should jump to when opened contextually. */
+export type SettingsFocus = "agent";
+
 export interface Workspace {
   tabs: Tab[];
   activeTabId: TabId;
@@ -167,6 +170,8 @@ export interface Workspace {
   info: WorkspaceInfo | null;
   settings: Settings;
   settingsOpen: boolean;
+  /** Set when settings were opened from a specific piece of friction. */
+  settingsFocus: SettingsFocus | null;
   /** Monotonic id seed. Keeps the reducer pure. */
   seq: number;
 }
@@ -192,6 +197,7 @@ export type WorkspaceAction =
   | { type: "session/clear"; sessionId: SessionId }
   | { type: "settings/loaded"; settings: Settings }
   | { type: "settings/toggle" }
+  | { type: "settings/open"; focus?: SettingsFocus }
   | { type: "settings/close" };
 
 /* ------------------------------------------------------------------ */
@@ -300,6 +306,7 @@ export function createInitialWorkspace(): Workspace {
     info: null,
     settings: DEFAULT_SETTINGS,
     settingsOpen: false,
+    settingsFocus: null,
     seq: ids.seq,
   };
 }
@@ -612,10 +619,15 @@ export function workspaceReducer(state: Workspace, action: WorkspaceAction): Wor
       return { ...state, settings: action.settings };
 
     case "settings/toggle":
-      return { ...state, settingsOpen: !state.settingsOpen };
+      return { ...state, settingsOpen: !state.settingsOpen, settingsFocus: null };
+
+    case "settings/open":
+      return { ...state, settingsOpen: true, settingsFocus: action.focus ?? null };
 
     case "settings/close":
-      return state.settingsOpen ? { ...state, settingsOpen: false } : state;
+      return state.settingsOpen
+        ? { ...state, settingsOpen: false, settingsFocus: null }
+        : state;
   }
 }
 
