@@ -21,6 +21,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The project does not have to sit at the repository root, so find it
+      # rather than assuming. Without this, a nested checkout fails with a
+      # bare "manifest path does not exist".
+      - name: Locate the project
+        id: locate
+        shell: bash
+        run: |
+          manifest=$(find . -name Cargo.toml -path '*src-tauri*' \
+            -not -path '*/target/*' -not -path '*/node_modules/*' | head -1)
+          if [ -z "$manifest" ]; then
+            echo "::error::No src-tauri/Cargo.toml found anywhere in the checkout."
+            find . -maxdepth 3 -name '*.toml' -o -maxdepth 3 -name package.json | head -20
+            exit 1
+          fi
+          native=$(dirname "$manifest")
+          app=$(dirname "$native")
+          echo "native=$native" >> "$GITHUB_OUTPUT"
+          echo "app=$app"       >> "$GITHUB_OUTPUT"
+          echo "Found the native core at $native, the app at $app"
+
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
@@ -31,7 +51,7 @@ jobs:
 
       - uses: swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri
+          workspaces: ${{ steps.locate.outputs.native }}
 
       - name: Install Linux build dependencies
         if: runner.os == 'Linux'
@@ -39,17 +59,30 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev
 
-      - run: bun install --frozen-lockfile
+      - name: Install frontend dependencies
+        working-directory: ${{ steps.locate.outputs.app }}
+        run: bun install --frozen-lockfile
 
-      - run: bun run typecheck
-      - run: bun test
-      - run: bun run build
+      - name: Typecheck
+        working-directory: ${{ steps.locate.outputs.app }}
+        run: bun run typecheck
+
+      - name: Test frontend
+        working-directory: ${{ steps.locate.outputs.app }}
+        run: bun test
+
+      - name: Build frontend
+        working-directory: ${{ steps.locate.outputs.app }}
+        run: bun run build
 
       - name: Format check
-        run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+        working-directory: ${{ steps.locate.outputs.native }}
+        run: cargo fmt -- --check
 
       - name: Clippy
-        run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+        working-directory: ${{ steps.locate.outputs.native }}
+        run: cargo clippy -- -D warnings
 
       - name: Test native core
-        run: cargo test --manifest-path src-tauri/Cargo.toml
+        working-directory: ${{ steps.locate.outputs.native }}
+        run: cargo test
