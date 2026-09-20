@@ -1,0 +1,64 @@
+/*
+ * Forge design tokens.
+ *
+ * Every color, space and radius used by the shell comes from here so the
+ * theme stays swappable. Components must not hardcode raw values.
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* Surfaces, back to front */
+  --bg-base: #0b0d10;
+  --bg-surface: #12151a;
+  --bg-raised: #171b21;
+  --bg-overlay: #1e232b;
+
+  /* Text */
+  --text: #e6e9ef;
+  --text-muted: #8b94a3;
+  --text-faint: #5b6472;
+
+  /* Lines */
+  --border: #232830;
+  --border-strong: #2f3641;
+
+  /* Accents */
+  --accent: #e8833a;
+  --accent-dim: #8a4e22;
+  --accent-agent: #7c9eff;
+  --ok: #4ec984;
+  --warn: #e0b341;
+  --err: #f06c6c;
+
+  /* Typography */
+  --font-mono: ui-monospace, "JetBrains Mono", "Cascadia Code", "SF Mono",
+    Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-md: 13px;
+  --text-lg: 15px;
+
+  /* Space */
+  --space-1: 4px;
+  --space-2: 6px;
+  --space-3: 8px;
+  --space-4: 12px;
+  --space-5: 16px;
+  --space-6: 24px;
+
+  /* Shape */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+
+  /* Chrome metrics */
+  --header-height: 38px;
+  --tabstrip-height: 34px;
+  --statusbar-height: 24px;
+  --agent-panel-width: 340px;
+  --gutter: 1px;
+
+  /* Motion */
+  --transition-fast: 90ms ease;
+}

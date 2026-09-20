@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -A1 '^name = \"tauri\"$' src-tauri/Cargo.lock)",
+      "Bash(grep -A1 '^name = \"tauri-build\"$' src-tauri/Cargo.lock)",
+      "Bash(grep -A1 '^name = \"wry\"$' src-tauri/Cargo.lock)",
+      "Bash(bun --version)",
+      "Bash(cargo --version)",
+      "Bash(rustc --version)"
+    ]
+  }
+}
