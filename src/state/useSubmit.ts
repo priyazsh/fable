@@ -7,16 +7,12 @@
 
 import { useCallback } from "react";
 
+import { killAgent, runAgentTask } from "@/platform/agent";
 import { ensureCommand, cachedCommand, killCommand, resolveDir, runCommand } from "@/platform/shell";
 
 import { classify, parseCd } from "./classify";
 import { useWorkspaceDispatch } from "./WorkspaceContext";
 import type { CommandEntry, Entry, Session, TaskEntry } from "./workspace";
-
-const AGENT_UNAVAILABLE =
-  "No agent provider is configured yet — the Claude Code and OpenAI backends " +
-  "arrive in milestones 9 and 10.\n\n" +
-  "If you meant to run this as a command, prefix it with ! to force it to the shell.";
 
 function newEntryId(): string {
   return crypto.randomUUID?.() ?? `entry-${Math.random().toString(36).slice(2)}`;
@@ -51,10 +47,17 @@ export function useSubmit() {
           kind: "task",
           input: route.input,
           cwd: session.cwd,
-          response: null,
+          steps: [],
+          running: true,
+          error: null,
+          durationMs: null,
         };
         dispatch({ type: "entry/start", sessionId: session.id, entry });
-        dispatch({ type: "entry/response", entryId: id, response: AGENT_UNAVAILABLE });
+        try {
+          await runAgentTask(id, route.input, session.cwd);
+        } catch (error) {
+          dispatch({ type: "entry/agentFailed", entryId: id, message: messageOf(error) });
+        }
         return;
       }
 
@@ -98,14 +101,20 @@ export function useSubmit() {
     [dispatch],
   );
 
-  /** Kills the most recent still-running command. Returns whether one existed. */
+  /**
+   * Kills the most recent still-running command or agent task. Returns whether
+   * there was anything to interrupt, so the caller knows to swallow Ctrl+C.
+   */
   const interrupt = useCallback((entries: Entry[]): boolean => {
     for (let index = entries.length - 1; index >= 0; index -= 1) {
       const entry = entries[index];
-      if (entry.kind === "command" && entry.running) {
+      if (!entry.running) continue;
+      if (entry.kind === "command") {
         void killCommand(entry.id);
-        return true;
+      } else {
+        void killAgent(entry.id);
       }
+      return true;
     }
     return false;
   }, []);

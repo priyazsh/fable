@@ -5,6 +5,7 @@ import { resolveBinding } from "@/state/keymap";
 import { activeSessionOf, activeTabOf } from "@/state/workspace";
 
 import { PaneTree } from "./PaneTree";
+import { SettingsPanel } from "./SettingsPanel";
 import { StatusBar } from "./StatusBar";
 import { TabStrip } from "./TabStrip";
 import styles from "./Shell.module.css";
@@ -49,6 +50,8 @@ export function Shell() {
       </main>
 
       <StatusBar />
+
+      {workspace.settingsOpen && <SettingsPanel />}
     </div>
   );
 }

@@ -89,6 +89,13 @@ export const KEYMAP: KeyBinding[] = [
     command: { type: "@clearSession" },
   },
   {
+    chord: "Ctrl+,",
+    label: "Settings",
+    code: "Comma",
+    ctrl: true,
+    command: { type: "settings/toggle" },
+  },
+  {
     chord: "Ctrl+Tab",
     label: "Next tab",
     code: "Tab",
@@ -127,4 +134,5 @@ export const SHORTCUT_HELP: { chord: string; label: string }[] = [
   { chord: "Ctrl+Shift+E", label: "Split down" },
   { chord: "Ctrl+L", label: "Clear" },
   { chord: "Ctrl+C", label: "Interrupt" },
+  { chord: "Ctrl+,", label: "Settings" },
 ];

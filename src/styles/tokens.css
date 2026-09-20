@@ -31,13 +31,18 @@
   --warn: #e0b341;
   --err: #f06c6c;
 
-  /* Typography */
-  --font-mono: ui-monospace, "JetBrains Mono", "Cascadia Code", "SF Mono",
+  /* Typography.
+     Settings override --font-mono (prepending a chosen family) and
+     --font-size; every text size derives from the latter so the whole UI
+     scales together. */
+  --font-mono-system: ui-monospace, "JetBrains Mono", "Cascadia Code", "SF Mono",
     Menlo, Consolas, "DejaVu Sans Mono", monospace;
-  --text-xs: 11px;
-  --text-sm: 12px;
-  --text-md: 13px;
-  --text-lg: 15px;
+  --font-mono: var(--font-mono-system);
+  --font-size: 13px;
+  --text-xs: calc(var(--font-size) - 2px);
+  --text-sm: calc(var(--font-size) - 1px);
+  --text-md: var(--font-size);
+  --text-lg: calc(var(--font-size) + 2px);
 
   /* Space */
   --space-1: 4px;

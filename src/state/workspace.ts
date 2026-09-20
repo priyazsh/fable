@@ -52,14 +52,49 @@ export interface CommandEntry {
   running: boolean;
 }
 
+/**
+ * Provider-neutral view of what the agent is doing. Mirrors `agent::AgentStep`
+ * in Rust; the Rust side pins this wire format with a test.
+ *
+ * There is deliberately no thinking/reasoning variant: the backend drops those
+ * blocks rather than forwarding them (spec §12).
+ */
+export type AgentStep =
+  | {
+      kind: "started";
+      sessionId: string | null;
+      model: string | null;
+      permissionMode: string | null;
+    }
+  /** Prose the agent wrote for the user. */
+  | { kind: "text"; text: string }
+  /** An action the agent took. */
+  | { kind: "tool"; name: string; detail: string | null }
+  /** Liveness only — a token count, never any content. */
+  | { kind: "progress"; tokens: number }
+  /** Out-of-band message, such as backend stderr. */
+  | { kind: "notice"; text: string }
+  | {
+      kind: "done";
+      result: string | null;
+      isError: boolean;
+      turns: number | null;
+      durationMs: number | null;
+      costUsd: number | null;
+      denials: number;
+    };
+
 /** Something the user asked the agent to do. */
 export interface TaskEntry {
   id: EntryId;
   kind: "task";
   input: string;
   cwd: string;
-  /** `null` while the agent is working. */
-  response: string | null;
+  steps: AgentStep[];
+  running: boolean;
+  /** Set when the backend could not start, or died without a result. */
+  error: string | null;
+  durationMs: number | null;
 }
 
 export type Entry = CommandEntry | TaskEntry;
@@ -80,6 +115,41 @@ export interface Tab {
   activePaneId: PaneId;
 }
 
+/** Where a newly opened tab starts. Mirrors the Rust enum. */
+export type NewTabCwd = "cwd" | "home";
+
+/**
+ * How much the agent may do unattended.
+ *
+ * `readOnly` is the default: destructive access is never granted implicitly
+ * (spec §11) and autonomy is an explicit opt-in (spec §13).
+ */
+export type AgentPermissions = "readOnly" | "edits" | "full";
+
+/** Mirrors `settings::Settings` in Rust. */
+export interface Settings {
+  fontFamily: string;
+  fontSize: number;
+  /** `null` means "use $SHELL". */
+  shell: string | null;
+  newTabCwd: NewTabCwd;
+  agentPermissions: AgentPermissions;
+  /** `null` uses the backend's own default model. */
+  agentModel: string | null;
+  /** `null` looks up `claude` on PATH. */
+  agentBinary: string | null;
+}
+
+export const DEFAULT_SETTINGS: Settings = {
+  fontFamily: "ui-monospace",
+  fontSize: 13,
+  shell: null,
+  newTabCwd: "cwd",
+  agentPermissions: "readOnly",
+  agentModel: null,
+  agentBinary: null,
+};
+
 /** Snapshot returned by the `workspace_info` Rust command. */
 export interface WorkspaceInfo {
   cwd: string;
@@ -95,6 +165,8 @@ export interface Workspace {
   sessions: Record<SessionId, Session>;
   entries: Record<EntryId, Entry>;
   info: WorkspaceInfo | null;
+  settings: Settings;
+  settingsOpen: boolean;
   /** Monotonic id seed. Keeps the reducer pure. */
   seq: number;
 }
@@ -113,9 +185,14 @@ export type WorkspaceAction =
   | { type: "entry/start"; sessionId: SessionId; entry: Entry }
   | { type: "entry/output"; entryId: EntryId; stream: OutputStream; text: string }
   | { type: "entry/exit"; entryId: EntryId; exitCode: number | null; durationMs: number }
-  | { type: "entry/response"; entryId: EntryId; response: string }
+  | { type: "entry/agentStep"; entryId: EntryId; step: AgentStep }
+  | { type: "entry/agentExit"; entryId: EntryId; exitCode: number | null; durationMs: number }
+  | { type: "entry/agentFailed"; entryId: EntryId; message: string }
   | { type: "session/cwd"; sessionId: SessionId; cwd: string }
-  | { type: "session/clear"; sessionId: SessionId };
+  | { type: "session/clear"; sessionId: SessionId }
+  | { type: "settings/loaded"; settings: Settings }
+  | { type: "settings/toggle" }
+  | { type: "settings/close" };
 
 /* ------------------------------------------------------------------ */
 /* Tree helpers                                                        */
@@ -185,6 +262,14 @@ function minter(start: number) {
 
 const DEFAULT_CWD = "~";
 
+/** Starting directory for a new tab, per the `newTabCwd` setting. */
+function startingCwd(state: Workspace): string {
+  if (state.settings.newTabCwd === "home") {
+    return state.info?.home ?? state.info?.cwd ?? DEFAULT_CWD;
+  }
+  return state.info?.cwd ?? DEFAULT_CWD;
+}
+
 function createTab(
   id: (prefix: string) => string,
   cwd: string,
@@ -213,6 +298,8 @@ export function createInitialWorkspace(): Workspace {
     sessions: { [session.id]: session },
     entries: {},
     info: null,
+    settings: DEFAULT_SETTINGS,
+    settingsOpen: false,
     seq: ids.seq,
   };
 }
@@ -247,6 +334,18 @@ function appendChunk(chunks: OutputChunk[], stream: OutputStream, text: string):
     return [...chunks.slice(0, -1), { stream, text: last.text + text }];
   }
   return [...chunks, { stream, text }];
+}
+
+/**
+ * Appends an agent step, collapsing consecutive progress ticks so a long task
+ * does not accumulate hundreds of counter entries.
+ */
+function appendStep(steps: AgentStep[], step: AgentStep): AgentStep[] {
+  const last = steps[steps.length - 1];
+  if (step.kind === "progress" && last?.kind === "progress") {
+    return [...steps.slice(0, -1), step];
+  }
+  return [...steps, step];
 }
 
 /** Applies `change` to one entry, leaving state untouched if it is gone. */
@@ -284,8 +383,7 @@ export function workspaceReducer(state: Workspace, action: WorkspaceAction): Wor
     }
 
     case "tab/open": {
-      const cwd = state.info?.cwd ?? DEFAULT_CWD;
-      const { tab, session } = createTab(ids.next, cwd, state.tabs.length + 1);
+      const { tab, session } = createTab(ids.next, startingCwd(state), state.tabs.length + 1);
       return {
         ...state,
         tabs: [...state.tabs, tab],
@@ -301,8 +399,7 @@ export function workspaceReducer(state: Workspace, action: WorkspaceAction): Wor
 
       // Closing the final tab leaves a fresh one rather than an empty shell.
       if (state.tabs.length === 1) {
-        const cwd = state.info?.cwd ?? DEFAULT_CWD;
-        const { tab, session } = createTab(ids.next, cwd, 1);
+        const { tab, session } = createTab(ids.next, startingCwd(state), 1);
         return {
           ...state,
           tabs: [tab],
@@ -459,9 +556,33 @@ export function workspaceReducer(state: Workspace, action: WorkspaceAction): Wor
           : entry,
       );
 
-    case "entry/response":
+    case "entry/agentStep":
       return patchEntry(state, action.entryId, (entry) =>
-        entry.kind === "task" ? { ...entry, response: action.response } : entry,
+        entry.kind === "task"
+          ? { ...entry, steps: appendStep(entry.steps, action.step) }
+          : entry,
+      );
+
+    case "entry/agentExit":
+      return patchEntry(state, action.entryId, (entry) => {
+        if (entry.kind !== "task") return entry;
+        // A backend that died without reporting a result owes an explanation.
+        const finished = entry.steps.some((step) => step.kind === "done");
+        const error =
+          entry.error ??
+          (finished || action.exitCode === 0
+            ? null
+            : action.exitCode === null
+              ? "The agent was interrupted."
+              : `The agent exited with code ${action.exitCode}.`);
+        return { ...entry, running: false, durationMs: action.durationMs, error };
+      });
+
+    case "entry/agentFailed":
+      return patchEntry(state, action.entryId, (entry) =>
+        entry.kind === "task"
+          ? { ...entry, running: false, error: action.message }
+          : entry,
       );
 
     case "session/cwd": {
@@ -486,6 +607,15 @@ export function workspaceReducer(state: Workspace, action: WorkspaceAction): Wor
         entries,
       };
     }
+
+    case "settings/loaded":
+      return { ...state, settings: action.settings };
+
+    case "settings/toggle":
+      return { ...state, settingsOpen: !state.settingsOpen };
+
+    case "settings/close":
+      return state.settingsOpen ? { ...state, settingsOpen: false } : state;
   }
 }
 

@@ -17,6 +17,7 @@ use std::time::{Duration, Instant};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 
+use crate::settings::SettingsState;
 use crate::workspace::home_dir;
 
 /// Children keyed by the timeline entry that started them, so they can be killed.
@@ -52,13 +53,39 @@ const SHELL_BUILTINS: &[&str] = &[
     "unalias", "unset", "wait",
 ];
 
-fn shell_invocation(input: &str) -> (String, Vec<String>) {
+/// Builds the argv for running `input` through `shell`.
+///
+/// `shell` is the configured override; `None` falls back to `$SHELL` on Unix
+/// and `cmd` on Windows. PowerShell and Git Bash need different flags from
+/// `cmd`, so the Windows branch dispatches on the executable name.
+fn shell_invocation(shell: Option<&str>, input: &str) -> (String, Vec<String>) {
     if cfg!(windows) {
-        ("cmd".to_string(), vec!["/C".to_string(), input.to_string()])
-    } else {
-        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
-        (shell, vec!["-c".to_string(), input.to_string()])
+        let Some(path) = shell else {
+            return ("cmd".to_string(), vec!["/C".to_string(), input.to_string()]);
+        };
+        let lowered = path.to_ascii_lowercase();
+        if lowered.contains("powershell") || lowered.contains("pwsh") {
+            return (
+                path.to_string(),
+                vec![
+                    "-NoLogo".to_string(),
+                    "-Command".to_string(),
+                    input.to_string(),
+                ],
+            );
+        }
+        if lowered.contains("bash") || lowered.contains("wsl") {
+            return (path.to_string(), vec!["-c".to_string(), input.to_string()]);
+        }
+        return (path.to_string(), vec!["/C".to_string(), input.to_string()]);
     }
+
+    let shell = shell
+        .map(str::to_string)
+        .or_else(|| std::env::var("SHELL").ok())
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| "/bin/sh".to_string());
+    (shell, vec!["-c".to_string(), input.to_string()])
 }
 
 /// Reads `pipe` to EOF, handing complete UTF-8 slices to `sink`.
@@ -120,6 +147,7 @@ fn spawn_reader<R: Read + Send + 'static>(
 pub fn run_command(
     app: AppHandle,
     state: State<'_, RunningCommands>,
+    settings: State<'_, SettingsState>,
     entry_id: String,
     input: String,
     cwd: String,
@@ -130,7 +158,8 @@ pub fn run_command(
     }
 
     let started = Instant::now();
-    let (program, args) = shell_invocation(&input);
+    let configured = settings.snapshot().shell;
+    let (program, args) = shell_invocation(configured.as_deref(), &input);
 
     let mut child = Command::new(&program)
         .args(&args)
@@ -388,7 +417,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn spawning_through_the_shell_captures_both_streams_and_the_exit_code() {
-        let (program, args) = shell_invocation("echo out; echo err >&2; exit 3");
+        let (program, args) = shell_invocation(None, "echo out; echo err >&2; exit 3");
         let mut child = Command::new(&program)
             .args(&args)
             .current_dir("/tmp")
@@ -415,7 +444,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn a_command_reading_stdin_terminates_instead_of_blocking() {
-        let (program, args) = shell_invocation("cat");
+        let (program, args) = shell_invocation(None, "cat");
         let mut child = Command::new(&program)
             .args(&args)
             .current_dir("/tmp")
@@ -431,6 +460,25 @@ mod tests {
 
         assert_eq!(stdout, "");
         assert_eq!(child.wait().unwrap().code(), Some(0));
+    }
+
+    #[test]
+    fn shell_invocation_honours_the_configured_shell() {
+        let (program, args) = shell_invocation(Some("/usr/bin/fish"), "ls");
+        if cfg!(windows) {
+            // Unknown Windows executables get cmd-style flags.
+            assert_eq!(args.first().map(String::as_str), Some("/C"));
+        } else {
+            assert_eq!(program, "/usr/bin/fish");
+            assert_eq!(args, vec!["-c".to_string(), "ls".to_string()]);
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_blank_shell_override_falls_back() {
+        let (program, _) = shell_invocation(Some("   "), "ls");
+        assert!(!program.trim().is_empty());
     }
 
     #[cfg(unix)]

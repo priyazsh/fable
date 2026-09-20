@@ -150,3 +150,67 @@
     animation: none;
   }
 }
+
+/* ---- agent steps ------------------------------------------------ */
+
+.steps {
+  padding-left: calc(1ch + var(--space-3));
+}
+
+.steps > * + * {
+  margin-top: var(--space-2);
+}
+
+.stepTool {
+  display: flex;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.stepArrow {
+  color: var(--accent-agent);
+}
+
+.stepDetail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-faint);
+}
+
+.stepMeta {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.stepNotice {
+  margin: 0;
+  color: var(--warn);
+  font-size: var(--text-sm);
+}
+
+.agentError {
+  margin: 0;
+  color: var(--err);
+  white-space: pre-wrap;
+  user-select: text;
+}
+
+.runningAgent {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-agent);
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .runningAgent {
+    animation: none;
+  }
+}

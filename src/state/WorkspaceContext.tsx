@@ -7,6 +7,8 @@ import {
   type ReactNode,
 } from "react";
 
+import { onAgentExit, onAgentStep } from "@/platform/agent";
+import { getSettings } from "@/platform/settings";
 import { onCommandExit, onCommandOutput } from "@/platform/shell";
 import { fetchWorkspaceInfo } from "@/platform/workspace-info";
 
@@ -33,6 +35,30 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    void getSettings().then((settings) => {
+      if (!cancelled) dispatch({ type: "settings/loaded", settings });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Typography is applied as custom properties on the root so every token that
+  // derives from --font-size scales with it.
+  useEffect(() => {
+    const root = document.documentElement;
+    const { fontFamily, fontSize } = state.settings;
+    root.style.setProperty("--font-size", `${fontSize}px`);
+    root.style.setProperty(
+      "--font-mono",
+      fontFamily === "ui-monospace"
+        ? "var(--font-mono-system)"
+        : `"${fontFamily}", var(--font-mono-system)`,
+    );
+  }, [state.settings.fontFamily, state.settings.fontSize]);
+
   // Command output arrives as events keyed by entry id, so a single pair of
   // listeners feeds every session.
   useEffect(() => {
@@ -44,6 +70,20 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     );
     return () => {
       void output.then((unlisten) => unlisten());
+      void exit.then((unlisten) => unlisten());
+    };
+  }, []);
+
+  // The agent streams the same way: steps keyed by entry id.
+  useEffect(() => {
+    const step = onAgentStep(({ entryId, step }) =>
+      dispatch({ type: "entry/agentStep", entryId, step }),
+    );
+    const exit = onAgentExit(({ entryId, exitCode, durationMs }) =>
+      dispatch({ type: "entry/agentExit", entryId, exitCode, durationMs }),
+    );
+    return () => {
+      void step.then((unlisten) => unlisten());
       void exit.then((unlisten) => unlisten());
     };
   }, []);

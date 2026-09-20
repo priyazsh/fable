@@ -7,6 +7,7 @@ import {
   activeTabOf,
   collectLeaves,
   createInitialWorkspace,
+  DEFAULT_SETTINGS,
   workspaceReducer,
   type PaneNode,
   type Workspace,
@@ -326,16 +327,126 @@ describe("timeline", () => {
     expect(activeSessionOf(state)!.history).toEqual(["ls", "pwd"]);
   });
 
-  test("a task entry fills in its response", () => {
-    const session = activeSessionOf(createInitialWorkspace())!;
-    let state = run(createInitialWorkspace(), {
+  function startTask(state: Workspace, id = "t1") {
+    const session = activeSessionOf(state)!;
+    return workspaceReducer(state, {
       type: "entry/start",
       sessionId: session.id,
-      entry: { id: "t1", kind: "task", input: "fix the build", cwd: session.cwd, response: null },
+      entry: {
+        id,
+        kind: "task",
+        input: "fix the build",
+        cwd: session.cwd,
+        steps: [],
+        running: true,
+        error: null,
+        durationMs: null,
+      },
     });
-    expect((state.entries.t1 as { response: string | null }).response).toBeNull();
-    state = run(state, { type: "entry/response", entryId: "t1", response: "done" });
-    expect((state.entries.t1 as { response: string | null }).response).toBe("done");
+  }
+
+  function task(state: Workspace, id = "t1") {
+    const entry = state.entries[id];
+    if (entry.kind !== "task") throw new Error("expected a task entry");
+    return entry;
+  }
+
+  test("agent steps accumulate in order", () => {
+    let state = startTask(createInitialWorkspace());
+    state = run(
+      state,
+      {
+        type: "entry/agentStep",
+        entryId: "t1",
+        step: { kind: "tool", name: "Read", detail: "src/auth.ts" },
+      },
+      { type: "entry/agentStep", entryId: "t1", step: { kind: "text", text: "Fixed it." } },
+    );
+    expect(task(state).steps.map((step) => step.kind)).toEqual(["tool", "text"]);
+  });
+
+  test("consecutive progress ticks collapse instead of piling up", () => {
+    let state = startTask(createInitialWorkspace());
+    for (const tokens of [50, 150, 300, 422]) {
+      state = run(state, {
+        type: "entry/agentStep",
+        entryId: "t1",
+        step: { kind: "progress", tokens },
+      });
+    }
+    const steps = task(state).steps;
+    expect(steps).toHaveLength(1);
+    expect(steps[0]).toEqual({ kind: "progress", tokens: 422 });
+
+    // A real step in between keeps both counters.
+    state = run(
+      state,
+      { type: "entry/agentStep", entryId: "t1", step: { kind: "text", text: "hm" } },
+      { type: "entry/agentStep", entryId: "t1", step: { kind: "progress", tokens: 600 } },
+    );
+    expect(task(state).steps.map((step) => step.kind)).toEqual([
+      "progress",
+      "text",
+      "progress",
+    ]);
+  });
+
+  test("a clean exit settles the task without inventing an error", () => {
+    let state = startTask(createInitialWorkspace());
+    state = run(
+      state,
+      {
+        type: "entry/agentStep",
+        entryId: "t1",
+        step: {
+          kind: "done",
+          result: "ok",
+          isError: false,
+          turns: 2,
+          durationMs: 900,
+          costUsd: 0.01,
+          denials: 0,
+        },
+      },
+      { type: "entry/agentExit", entryId: "t1", exitCode: 0, durationMs: 950 },
+    );
+    expect(task(state).running).toBe(false);
+    expect(task(state).error).toBeNull();
+    expect(task(state).durationMs).toBe(950);
+  });
+
+  test("a backend that dies without a result owes an explanation", () => {
+    let state = startTask(createInitialWorkspace());
+    state = run(state, {
+      type: "entry/agentExit",
+      entryId: "t1",
+      exitCode: 1,
+      durationMs: 40,
+    });
+    expect(task(state).running).toBe(false);
+    expect(task(state).error).toBe("The agent exited with code 1.");
+  });
+
+  test("an interrupted task says so rather than reporting a code", () => {
+    let state = startTask(createInitialWorkspace());
+    state = run(state, {
+      type: "entry/agentExit",
+      entryId: "t1",
+      exitCode: null,
+      durationMs: 40,
+    });
+    expect(task(state).error).toBe("The agent was interrupted.");
+  });
+
+  test("a failure to launch is reported verbatim and beats the exit code", () => {
+    let state = startTask(createInitialWorkspace());
+    state = run(
+      state,
+      { type: "entry/agentFailed", entryId: "t1", message: "could not start `claude`" },
+      { type: "entry/agentExit", entryId: "t1", exitCode: 127, durationMs: 5 },
+    );
+    expect(task(state).error).toBe("could not start `claude`");
+    expect(task(state).running).toBe(false);
   });
 
   test("clearing drops the session's entries but keeps its history", () => {
@@ -361,5 +472,80 @@ describe("timeline", () => {
 
     state = run(state, { type: "pane/close" });
     expect(Object.keys(state.entries)).toHaveLength(0);
+  });
+});
+
+describe("settings", () => {
+  const info = {
+    cwd: "/home/dev/app",
+    home: "/home/dev",
+    os: "linux",
+    arch: "x86_64",
+    appVersion: "0.1.0",
+  };
+
+  test("the panel toggles and closes idempotently", () => {
+    let state = createInitialWorkspace();
+    expect(state.settingsOpen).toBe(false);
+
+    state = run(state, { type: "settings/toggle" });
+    expect(state.settingsOpen).toBe(true);
+
+    state = run(state, { type: "settings/close" });
+    expect(state.settingsOpen).toBe(false);
+    // Closing an already-closed panel changes nothing.
+    expect(run(state, { type: "settings/close" })).toBe(state);
+  });
+
+  test("loaded settings replace the defaults", () => {
+    const state = run(createInitialWorkspace(), {
+      type: "settings/loaded",
+      settings: { ...DEFAULT_SETTINGS, fontSize: 16, shell: "/usr/bin/fish" },
+    });
+    expect(state.settings.fontSize).toBe(16);
+    expect(state.settings.shell).toBe("/usr/bin/fish");
+  });
+
+  test("new tabs start in the launch directory by default", () => {
+    const state = run(
+      createInitialWorkspace(),
+      { type: "info/loaded", info },
+      { type: "tab/open" },
+    );
+    expect(activeSessionOf(state)!.cwd).toBe("/home/dev/app");
+  });
+
+  test("newTabCwd: home starts new tabs at home instead", () => {
+    const state = run(
+      createInitialWorkspace(),
+      { type: "info/loaded", info },
+      { type: "settings/loaded", settings: { ...DEFAULT_SETTINGS, newTabCwd: "home" } },
+      { type: "tab/open" },
+    );
+    expect(activeSessionOf(state)!.cwd).toBe("/home/dev");
+  });
+
+  test("the replacement for a closed last tab honours the setting too", () => {
+    let state = run(
+      createInitialWorkspace(),
+      { type: "info/loaded", info },
+      { type: "settings/loaded", settings: { ...DEFAULT_SETTINGS, newTabCwd: "home" } },
+    );
+    state = run(state, { type: "tab/close", tabId: state.activeTabId });
+    expect(activeSessionOf(state)!.cwd).toBe("/home/dev");
+  });
+
+  test("a cd only moves its own session", () => {
+    let state = run(
+      createInitialWorkspace(),
+      { type: "info/loaded", info },
+      { type: "pane/split", direction: "row" },
+    );
+    const moved = activeSessionOf(state)!;
+    state = run(state, { type: "session/cwd", sessionId: moved.id, cwd: "/tmp" });
+
+    const others = Object.values(state.sessions).filter((session) => session.id !== moved.id);
+    expect(activeSessionOf(state)!.cwd).toBe("/tmp");
+    expect(others.every((session) => session.cwd === "/home/dev/app")).toBe(true);
   });
 });
